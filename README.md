@@ -1,2 +1,2 @@
-# ReCoast-Collab
-ReCoast scripts to collaborate with others on.
+# ReCoast-Published
+ReCoast scripts used to create the published figures.
