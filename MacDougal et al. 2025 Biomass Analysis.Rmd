@@ -1,0 +1,5083 @@
+---
+title: "MacDougal et al. 2025 Biomass Analysis"
+author: "Elizabeth MacDougal"
+date: "2024-2025
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+geometry: margin=1in
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir=[SET ROOT DIRECTORY HERE])
+knitr::opts_chunk$set(
+  dev = "png",
+  dpe = 300,
+  echo = FALSE,
+  cache = TRUE
+)
+options(contrasts=c("contr.helmert","contr.poly"));options("contrasts")
+```
+
+# Description
+
+This file accompanies the paper "Wetland plant growth in recycled glass sand versus dredged river sand: Evaluating a new resource for coastal restoration." <https://doi.org/10.1111/rec.70020>. Paper authors: Elizabeth MacDougal, Bek Markel, Emily Farrer, Shehbaz Ahmad, Julie Albert, Sunshine Van Bael. Analyses in this file were conducted by Elizabeth MacDougal, with advising from Emily Farrer and Sunshine Van Bael. Corresponding author: Elizabeth MacDougal, [emacdougal\@tulane.edu](mailto:emacdougal@tulane.edu){.email}
+
+The data come from two experiments, which are described in the paper. Contributions to these two experiments were as follows:
+
+Experiment 1: Funding was provided by National Science Foundation Convergence Accelerator Program Award Number 2230769.
+
+-   SV and EF conceived of the full factorial design, with soil types and native plants as factors, and plant growth as the response variable.
+
+-   SV and EM conceived of the layout and construction of the mesocosm, with the assistance of Steve Formel.
+
+-   BX designed, maintained, and adjusted the watering and lighting throughout the experiment.
+
+-   JA, SV, EF, EM, and Franciska Trautman determined the specific soil mixtures to use.
+
+-   EF, SV, EM, and BX determined species to include.
+
+-   EM and EF determined nutrient addition protocol.
+
+-   EM and lab members added nutrients weekly.
+
+-   EM led interim data collection on growth, including stem count, plant height, and stem diameter.
+
+-   BX, Nico Potoker, and lab members assisted.
+
+-   BX controlled pests.
+
+-   EM and BX led harvest, assisted by NP, SV, EF, lab members, and volunteers.
+
+-   SV and NP subsampled belowground biomass.
+
+-   EM led dry biomass collection, assisted by BX, lab members, and volunteers.
+
+-   EM managed, cleaned, and processed growth data, which was entered and QC'd by BX and lab members.
+
+-   SA conducted soil bulk density, porosity, permeability, and compaction tests, advised by JA.
+
+Experiment 2: Funding was provided by National Science Foundation Convergence Accelerator Program Award Number 2137730.
+
+-   EM, SV, EF, and Kejun Wen modified the design of the first experiment to include a biopolymer Substrate. These data were not included in this paper.
+
+-   EM verified that the experiment would have enough power to detect a difference in soil types even if the biopolymer data was not included.
+
+-   EM, SV decided on species to use after consulting with Nicholas Stevens, and Gary Shaffer. Species were selected to match those planned for use in an upcoming project.
+
+-   SV, and EM determined the specific soil mixtures to use, with feedback from JA and FT.
+
+-   EM determined nutrient addition, with feedback from SV.
+
+-   BX designed, maintained, and adjusted the watering and lighting throughout the experiment
+
+-   EM led interim data collection on growth, including stem count, plant height, and stem diameter. BX, lab members, and volunteers assisted.
+
+-   EM and BX led harvest, assisted by SV, EF, Ansley Levine, lab members, and volunteers.
+
+-   EM and Lee Kaufman subsampled belowground biomass.
+
+-   EM led dry biomass collection, assisted by BX, Ansley Levine, lab members, and volunteers.
+
+-   EM planned nutrient sampling, which was conducted by lab members.
+
+-   EM sampled soils for nutrients.
+
+-   EM ordered soil and plant nutrient testing from LSU's Soil Testing and Plant Analysis Lab.
+
+-   EM managed, cleaned, and processed growth data, which was entered and QC'd by BX and lab members.
+
+-   SA conducted soil bulk density, porosity, permeability, and compaction tests, advised by JA.
+
+## Purpose of this File
+
+This file includes all analyses described in the paper. It serves to provide more detail to those who are curious, and to help others reproduce the results.
+
+Originally, we had analyzed block as a random effect. The code for this is at the bottom of the document. It was not used for the paper.
+
+# Environment Setup
+
+Define options for contrasts
+
+```{r, include=FALSE}
+options(contrasts = c("contr.helmert", "contr.poly"))
+options("contrasts")
+```
+
+# Biomass
+
+Libraries Used
+
+```{r, warning=FALSE, echo=FALSE}
+library(dplyr) #DATA ORGANIZATION %>% symbol is used for "piping."
+library(nlme) #DATA ORGANIZATION. Tidyr is in here, and this lets me rearrange my data. 
+library(plotrix) #PLOTTING DATA. For means and standard error, to set error bars on plots. 
+library(ggplot2) #PLOTTING DATA. Directly used to make nice plots 
+library(multcomp) #ANALYZING DATA. Used for glht, for Tukey Tests
+#library(easystats) # To help with graphing models with ggplot https://easystats.github.io/see/
+library(car) # ANALYZING DATA. To perform Levene's test of homogeneous variances 
+```
+
+## Experiment 1
+
+### Data Description
+
+| Column Name | Description |
+|--------------------------|----------------------------------------------|
+| ID | IDs were assigned to mesocosms based on position in greenhouse. They range from 1-120. |
+| Genus | Genus of the plant. Only one genus per experiment, so these correspond to the species referred to in the paper. |
+| Substrate | Corresponds to soil type in the paper. |
+| Sub | This is an abbreviation of the Substrate. F = Fine glass sand, C = Broad range coarse glass sand, M = Broad range glass/dredge mix, D = Dredge |
+| BlockNum | Ten blocks in the experiment, each with one of each species/soil combination. |
+| DateMeasured | Plant height, stem count, and diameter were measured before harvest. This is the date they were measured. mm/dd/yyyy |
+| DatePlanted | All plants were originally planted on the same day, but those that died within the first two months of harvest were replaced. mm/dd/yyyy. |
+| DateHarvested | mm/dd/yyyy |
+| NumStems | Number of stems. Measured at 5cm for cutgrass. |
+| Height_cm | Height in cm of tallest stem. |
+| Diameter_mm | Diameter of willow in mm. Measured at Wite-Out mark placed 12cm from original soil surface. |
+| Condition | 1-5 dead to healthy. |
+| Notes_PreHarvest | Notes that were taken prior to harvesting. |
+| DateWetWeighed | Date that plants were weighed after harvesting and rinsing and before drying |
+| AGWetmass_g | Mass in g of aboveground plant tissue after harvesting and before drying |
+| BGWetmass_g | Mass in g of belowground plant tissue after harvesting and rinsing and before drying |
+| DateAGDryWeighed | Date that aboveground tissue was weighed after it had finished drying |
+| AGDrymass_g | Mass in g of dried aboveground tissue |
+| DateBGDryWeighed | Date that belowground tissue was weighed after it had finished drying and extra soil had been removed from it. |
+| BGDrymass_g | Mass in g of dried, cleaned belowground tissue. This does not count the small amount subsampled from each root mass upon harvest. |
+| Totmass | AGDrymass_g + BGDrymass_g |
+| Notes_Biomass | Notes taken while weighing the biomass. |
+| Dead | Y = Yes, the plant was dead. N = No, the plant was not dead. |
+| Exclude | Y = Yes, it should be excluded from analysis. This applies to dead plants and donated plants. |
+
+### Data Prep
+
+#### Assign Data to a Variable
+
+```{r}
+g1growth <- read.csv("Biomass_Experiment1.csv", na.strings=c(""), stringsAsFactors = T)
+```
+
+#### Straighten up the data
+
+Setting levels and labels for factors.
+
+```{r}
+g1growth <- g1growth %>%
+  filter(Exclude == "N")
+g1growth$Sub <- factor(g1growth$Sub, levels = c("F", "C", "M", "D"))
+g1growth$Substrate <- factor(g1growth$Substrate, levels = c("Fine", "Coarse", "Mix", "Dredge"))
+g1growth$Block <- factor(g1growth$Block,
+                         levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))
+g1growth$Genus <- factor(g1growth$Genus, levels = c("Sporobolus","Zizaniopsis","Salix"))
+g1growth$CommonName<- factor(g1growth$Genus, levels = c("Sporobolus","Zizaniopsis","Salix"), labels = c("Cordgrass","Cutgrass","Willow"))
+g1growth$Height_cm_Initial <- as.numeric(g1growth$Height_cm_Initial)
+```
+
+#### Separate Data for Analyses
+
+```{r}
+#Totals
+totg1growth <- g1growth %>%
+  filter(!is.na(Totmass))
+
+totsalix <- totg1growth %>%
+  filter(Genus == "Salix")
+
+totspart <- totg1growth %>%
+  filter(Genus == "Sporobolus")
+
+totziz <- totg1growth %>%
+  filter(Genus == "Zizaniopsis")
+
+#Aboveground
+g1AGmass <- g1growth %>%
+  filter(!is.na(AGDrymass_g))
+
+#Belowground
+g1BGmass <- g1growth %>%
+  filter(!is.na(BGDrymass_g))
+```
+
+#### Looking for Biases
+
+##### Replicates
+
+```{r}
+totsalix %>%
+  count(Sub)
+
+totspart %>%
+  count(Sub)
+
+totziz %>%
+  count(Sub)
+```
+
+##### Initial Plant Sizes
+
+First I will confirm that the initial plant sizes were comparable across assigned treatments.
+
+```{r}
+#Stem Number
+g1stems_initial <- g1growth %>%
+  filter(!is.na(NumStems_Initial))
+boxplot(
+  g1stems_initial$NumStems_Initial ~ g1stems_initial$Substrate,
+  ylab = "Initial Stem Number",
+  xlab = "Substrate",
+  main = "Initial stem number (cordgrass and cutgrass)"
+)
+
+#Height
+g1height_initial <- g1growth %>%
+  filter(!is.na(Height_cm_Initial))
+boxplot(
+  g1height_initial$Height_cm_Initial ~ g1height_initial$Substrate,
+  ylab = "Height of Tallest Stem (cm)",
+  xlab = "Substrate",
+  main = "Initial height (cordgrass)"
+)
+
+#Diameter
+g1diam_initial <- g1growth %>%
+  filter(!is.na(Diam_mm_Initial))
+boxplot(
+  g1diam_initial$Diam_mm_Initial ~ g1diam_initial$Substrate,
+  ylab = "Diameter (mm)",
+  xlab = "Substrate",
+  main = "Initial diameter (willow)"
+)
+
+```
+
+No clear differences in initial height of BCs planted in each substrate.
+
+I will now look at the initial diameters.
+
+```{r}
+boxplot(
+  bcgrowth$Diameter_mm_September ~ bcgrowth$Substrate,
+  ylab = "Diameter at 9cm (mm)",
+  xlab = "Substrate",
+  main = "Baldcypress Diameter by Substrate: September"
+)
+```
+
+Diameters are also comparable across treatments, with the lowest variance in the mix.
+
+##### Giant Bulrush
+
+I'll look for differences in the initial height of plants based on substrate they were assigned to.
+
+```{r}
+boxplot(
+  gbgrowth$Height_cm_Initial ~ gbgrowth$Substrate,
+  ylab = "Initial Height in cm",
+  xlab = "Substrate",
+  main = "Giant Bullrush Initial Height"
+)
+```
+
+No clear difference in GB initial height across substrates. There are two outlying tall individuals in the dredge.
+
+# Block as a Main Effect
+
+### AG Collective Drymass
+
+#### Model Selection
+
+start with including block, just because we know that greenhouses vary in light reaching different parts. always start with all fixed effects (including interaction)
+
+```{r}
+g1AGM1 <-
+gls(
+    AGDrymass_g ~ Genus * Sub + Block,
+    data = g1AGmass
+  )
+
+anova(g1AGM1)
+
+g1AGM1b <-
+  gls(
+    AGDrymass_g ~ Genus + Sub + Block,
+    data = g1AGmass
+  )
+
+anova(g1AGM1b)
+
+anova(g1AGM1, g1AGM1b)
+```
+
+Genus and Substrate are both important factors to explain plant biomass. There is no interaction between genus and Substrate, and block does not have an effect on biomass. Nonetheless, the model that includes the interaction term has the lowest AIC so we will use it.
+
+```{r}
+g1AGM2 <- 
+  gls(
+    AGDrymass_g ~ Genus * Sub, data = g1AGmass)
+g1AGM2b <- 
+  gls(AGDrymass_g ~ Genus + Sub, data = g1AGmass)
+anova(g1AGM1, g1AGM2, g1AGM1b, g1AGM2b)
+```
+
+Though block is not significant, the model that has the lowest AIC includes block as a main effect.
+
+#### Validation
+
+##### Heterogeneous Variances
+
+We will perform Levene's test to determine whether we need to account for heterogeneous variances:
+
+```{r}
+leveneTest(AGDrymass_g ~ Genus * Substrate, data = g1AGmass)
+```
+
+The genus and substrate groups do not have homogeneous variance, so we will correct for variance.
+
+```{r}
+g1AGM1 <-
+gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  data = g1AGmass
+  )
+
+g1AGM1Gen <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Genus),
+  method = "REML",
+  data = g1AGmass
+) #Genus
+
+g1AGM1Sub <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Sub),
+  method = "REML",
+  data = g1AGmass
+) #Sub
+
+g1AGM1Block <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Block),
+  method = "REML",
+  data = g1AGmass
+) #Block
+
+g1AGM1GenSub <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |Genus), 
+    varIdent(form = ~ 1 |Sub)),
+  method = "REML",
+  data = g1AGmass
+) #GenusSub
+
+g1AGM1GenBlock <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |Genus), 
+    varIdent(form = ~ 1 |Block)),
+  method = "REML",
+  data = g1AGmass
+) #GenusBlock
+
+g1AGM1SubBlock <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |Sub), 
+    varIdent(form = ~ 1 |Block)),
+  method = "REML",
+  data = g1AGmass
+) #SubstrateBlock
+
+
+g1AGM1GenSubBlock <- gls(
+  AGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |
+               Genus),
+    varIdent(form = ~ 1 |
+               Sub),
+    varIdent(form = ~ 1 |
+               Block)
+  ),
+  method = "REML",
+  data = g1AGmass
+) #GenusSubBlock
+```
+
+```{r}
+anova(g1AGM1, g1AGM1Gen) 
+anova(g1AGM1,g1AGM1Sub) 
+anova(g1AGM1Gen, g1AGM1GenSub) 
+anova(g1AGM1, g1AGM1Block)
+anova(g1AGM1Gen, g1AGM1GenBlock)
+anova(g1AGM1Sub, g1AGM1SubBlock)
+anova(g1AGM1GenSub, g1AGM1GenSubBlock)
+```
+
+sort the AICs for easier visualization of best
+
+```{r}
+myg1agaics <- AIC(
+  g1AGM1,
+  g1AGM1Gen,
+  g1AGM1Sub,
+  g1AGM1GenSub,
+  g1AGM1Block,
+  g1AGM1GenBlock,
+  g1AGM1SubBlock,
+  g1AGM1GenSubBlock
+)
+myg1agaics[order(myg1agaics$AIC), ]
+```
+
+Lowest AIC is heterogeneous variances by genus and Substrate
+
+```{r}
+finmodg1ag <- g1AGM1GenSub
+anova(finmodg1ag)
+summary(finmodg1ag)
+```
+
+##### Normality of residuals
+
+```{r}
+hist(resid(finmodg1ag, type = "normalized"))
+plot(fitted(finmodg1ag), resid(finmodg1ag, type = "normalized"))
+abline(h = 0, lty = 2)
+```
+
+These look just fine.
+
+#### Plot Means and Standard Errors
+
+```{r}
+
+my_colors <- c("gold","goldenrod2","chartreuse3","skyblue3")
+my_shapes <- c(18, 15, 17, 16)
+
+
+plotg1ag <- ggplot(g1AGmass, aes(Sub, AGDrymass_g)) +
+  geom_point(aes(color=Substrate, shape=Substrate),
+    alpha = 0.75,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_colors) +
+  scale_shape_manual(values = my_shapes) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2.5
+  ) +
+  theme_bw()
+
+plotg1aglab <- plotg1ag +
+  labs(x = "Substrate", y = "AG Biomass (g)")
+plotg1aglabfacet <- plotg1aglab +
+  facet_wrap(~Genus)
+
+plotg1aglabfacet
+```
+
+#### AG drymass Tukey tests
+
+In our model, the interaction term is not significant, so there is no need to do Tukey tests separately by species. The most correct way of doing things is by doing a Tukey test just testing the effect of Substrate. This code is immediately below (1).
+
+However, this makes it impossible to put letters over the results if we plot them by species. To compromise, we can actually use the full model and then do planned tukey tests. (2)
+
+(1) take out interaction term and test for overall Tukey differences among Substrates
+
+```{r}
+finmodg1ag2 <- gls(
+  AGDrymass_g ~ Genus + Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |Genus), 
+    varIdent(form = ~ 1 |Sub)),
+  method = "REML",
+  data = g1AGmass
+)
+summary(glht(finmodg1ag2, linfct = mcp(Sub = "Tukey")))
+```
+
+All Substrates differ aside from dredge and mix. (a, b, c, c) [If I run it with the interaction, then C=F \< M=D]
+
+(2) To run the Tukey test by species and Substrate, I need to first create a complex category that captures both.
+
+```{r}
+g1AGmass$GenusSub <- factor(paste(g1AGmass$Genus, g1AGmass$Sub, sep = "_"))
+
+finmodg1ag3 <-
+gls(
+  AGDrymass_g ~ GenusSub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |Genus), 
+    varIdent(form = ~ 1 |Sub)),
+    method = "REML",
+    data = g1AGmass
+  )
+
+AIC(finmodg1ag, finmodg1ag3)
+plot(fitted(finmodg1ag), fitted(finmodg1ag3))
+```
+
+As apparent in the scatterplot above, the two models are equivalent.
+
+```{r}
+summary(glht(finmodg1ag3, linfct = mcp(
+  GenusSub = c(
+    "Sporobolus_C-Sporobolus_F=0",
+    "Sporobolus_M-Sporobolus_F=0",
+    "Sporobolus_D-Sporobolus_F=0",
+    "Sporobolus_M-Sporobolus_C=0",
+    "Sporobolus_D-Sporobolus_C=0",
+    "Sporobolus_D-Sporobolus_M=0",
+    "Zizaniopsis_C-Zizaniopsis_F=0",
+    "Zizaniopsis_M-Zizaniopsis_F=0",
+    "Zizaniopsis_D-Zizaniopsis_F=0",
+    "Zizaniopsis_M-Zizaniopsis_C=0",
+    "Zizaniopsis_D-Zizaniopsis_C=0",
+    "Zizaniopsis_D-Zizaniopsis_M=0",
+    "Salix_C-Salix_F=0",
+    "Salix_M-Salix_F=0",
+    "Salix_D-Salix_F=0",
+    "Salix_M-Salix_C=0",
+    "Salix_D-Salix_C=0",
+    "Salix_D-Salix_M=0"
+  )
+)))
+```
+
+Sporobolus a, ab, bc, c; Zizaniopsis a, a, b, b; Salix a, b, b, b Note that if we ran block as a random effect, Salix coarse would have been equivalent to Salix glass, as well as to Mix and Dredge.
+
+#### AG Collective Summary
+
+```{r}
+anova(finmodg1ag, type = "marginal")
+G1AGSummary = "best ag dry biomass model shows an interaction term between genus and substrate (F[6,87]=2.3535, p=0.0374). g1AGM1GenSub. Sporobolus a, ab, bc, c; Zizaniopsis a, a, b, b; Salix a, b, b, b"
+G1AGSummary
+```
+
+### BG Collective Drymass
+
+#### Model Selection
+
+Always start with all fixed effects (including interaction).
+
+```{r}
+g1BGM1 <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  method = "REML",
+  data = g1BGmass
+) 
+
+anova(g1BGM1)
+```
+
+There are main effects of genus and substrate, but no interaction
+
+Should we include interaction in the model?
+
+```{r}
+g1BGM2 <- gls(
+  BGDrymass_g ~ Genus + Sub + Block, 
+  method = "REML", 
+  data = g1BGmass
+)
+
+anova(g1BGM1, g1BGM2) 
+```
+
+The model including the interaction term has a lower AIC, so we will retain it.
+
+#### Validation
+
+##### Heterogeneous Variances
+
+We will perform Levene's test to determine whether we need to account for heterogeneous variances:
+
+```{r}
+leveneTest(BGDrymass_g ~ Genus * Sub, data = g1BGmass)
+```
+
+The substrate and treatment groups are not homogeneously variant, so we will correct for variance.
+
+```{r}
+g1BGM1 <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  method = "REML",
+  data = g1BGmass
+)
+
+g1BGM1Gen <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Genus),
+  method = "REML",
+  data = g1BGmass
+) #Genus
+
+g1BGM1Sub <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Sub),
+  method = "REML",
+  data = g1BGmass
+) #Sub
+
+g1BGM1GenSub <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(varIdent(form = ~ 1 |
+                               Genus), 
+                    varIdent(form = ~ 1 | Sub)),
+  method =
+    "REML",
+  data = g1BGmass
+) #GenusSub
+
+g1BGM1Block <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Block),
+  method = "REML",
+  data = g1BGmass
+) #Block
+
+g1BGM1GenBlock <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(varIdent(form = ~ 1 |Genus), 
+                    varIdent(form = ~ 1 |Block)),
+  method = "REML",
+  data = g1BGmass
+) #GenBlock
+
+g1BGM1SubBlock <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(varIdent(form = ~ 1 |Sub), 
+                    varIdent(form = ~ 1 |Block)),
+  method = "REML",
+  data = g1BGmass
+) #SubBlock
+
+g1BGM1GenSubBlock <- gls(
+  BGDrymass_g ~ Genus * Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |
+               Genus),
+    varIdent(form = ~ 1 |
+               Sub),
+    varIdent(form = ~ 1 |
+               Block)
+  ),
+  method = "REML",
+  data = g1BGmass
+) #GenSubBlock
+
+anova(
+  g1BGM1,
+  g1BGM1Gen,
+  g1BGM1Sub,
+  g1BGM1GenSub,
+  g1BGM1Block,
+  g1BGM1GenBlock,
+  g1BGM1SubBlock,
+  g1BGM1GenSubBlock
+)
+```
+
+sort the AICs for easier visualization of best
+
+```{r}
+myg1bgaics <-
+  AIC(
+    g1BGM1,
+    g1BGM1Gen,
+    g1BGM1Sub,
+    g1BGM1GenSub,
+    g1BGM1Block,
+    g1BGM1GenBlock,
+    g1BGM1SubBlock,
+    g1BGM1GenSubBlock
+  )
+myg1bgaics[order(myg1bgaics$AIC), ]
+```
+
+So best one is heterogeneous variances by Sub and genus
+
+```{r}
+anova(g1BGM1GenSub, type = "marginal") 
+summary(g1BGM1GenSub)
+finmodg1bg <- g1BGM1GenSub
+```
+
+##### Normality of residuals
+
+```{r}
+hist(resid(finmodg1bg, type = "normalized"))
+plot(fitted(finmodg1bg), resid(finmodg1bg, type = "normalized"))
+abline(h = 0, lty = 2)
+```
+
+Looks good.
+
+#### Plot Means and Standard Error
+
+```{r}
+my_colors <- c("gold", "goldenrod2", "chartreuse3", "skyblue3")
+my_shapes <- c(18, 15, 17, 16)
+
+plotg1BG <- ggplot(g1BGmass, aes(Sub, BGDrymass_g)) +
+  scale_color_manual(values = my_colors) +
+  scale_shape_manual(values = my_shapes) +
+  geom_point(
+    aes(shape = Substrate, color = Substrate),
+    alpha = 0.75,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2.5
+  ) +
+  theme_bw()
+
+plotg1BGlab <- plotg1BG +
+  labs(x = "Substrate", y = "BG Biomass (g)")
+plotg1BGlabfacet <- plotg1BGlab +
+  facet_wrap( ~ Genus)
+
+plotg1BGlabfacet
+```
+
+#### BG Drymass Tukey tests
+
+There is an interaction, so we need to do Tukey by species. To do Tukey by spp and substrate, we will create a new category that joins both.
+
+```{r}
+
+g1BGmass$GenusSub <- factor(paste(g1BGmass$Genus, g1BGmass$Sub, sep = "_"))
+
+finmodg1bg3 <-
+  gls(
+  BGDrymass_g ~ GenusSub + Block,
+    weights = varComb(varIdent(form = ~ 1 |
+                                 Genus), 
+                      varIdent(form = ~ 1 | Sub)),
+    method =
+      "REML",
+    data = g1BGmass
+  )
+```
+
+```{r}
+summary(glht(finmodg1bg3, linfct = mcp(
+  GenusSub = c(
+    "Sporobolus_C-Sporobolus_F=0",
+    "Sporobolus_M-Sporobolus_F=0",
+    "Sporobolus_D-Sporobolus_F=0",
+    "Sporobolus_M-Sporobolus_C=0",
+    "Sporobolus_D-Sporobolus_C=0",
+    "Sporobolus_D-Sporobolus_M=0",
+    "Zizaniopsis_C-Zizaniopsis_F=0",
+    "Zizaniopsis_M-Zizaniopsis_F=0",
+    "Zizaniopsis_D-Zizaniopsis_F=0",
+    "Zizaniopsis_M-Zizaniopsis_C=0",
+    "Zizaniopsis_D-Zizaniopsis_C=0",
+    "Zizaniopsis_D-Zizaniopsis_M=0",
+    "Salix_C-Salix_F=0",
+    "Salix_M-Salix_F=0",
+    "Salix_D-Salix_F=0",
+    "Salix_M-Salix_C=0",
+    "Salix_D-Salix_C=0",
+    "Salix_D-Salix_M=0"
+  )
+)))
+```
+
+Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, ab; Salix: a, ab, ab, b
+
+#### BG Collective Summary
+
+```{r}
+anova(finmodg1bg)
+G1BGSummary <- "For belowground biomass, there are main effects of genus and Sub (F[2,87]=35.3299, p<0.0001; F[3,87]=21.8231, p<0.0001), and interaction between the two (F[6,87]=3.6225, p=0.003). Heterogeneous variance of genus and Substrate are important. g1BGM1GenSub. Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, ab; Salix: a, ab, ab, b"
+```
+
+### Total Collective Drymass
+
+#### Model Selection
+
+Begin with all fixed effects.
+
+```{r}
+g1TotM1 <- gls(
+  Totmass ~ Genus * Sub + Block,
+  method = "REML",
+  data = totg1growth
+)
+anova(g1TotM1)
+
+g1TotM1b <- gls(
+  Totmass ~ Genus + Sub + Block,
+  method = "REML",
+  data = totg1growth
+)
+anova(g1TotM1b)
+
+anova(g1TotM1,g1TotM1b)
+```
+
+No apparent interaction, but the AIC is lower by including it.
+
+#### Validation
+
+##### Heterogeneous Variances
+
+We will perform Levene's test to determine whether we need to account for heterogeneous variances:
+
+```{r}
+leveneTest(Totmass ~ Genus * Substrate, data = totg1growth)
+```
+
+Genus and substrate are not equally variant, so we will correct for heterogeneous variances.
+
+```{r}
+g1TotM1 <- gls(
+  Totmass ~ Genus * Sub + Block,
+  method = "REML",
+  data = totg1growth
+)
+
+g1TotM1Gen <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Genus),
+  method = "REML",
+  data = totg1growth
+) #Genus
+
+g1TotM1Sub <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Sub),
+  method = "REML",
+  data = totg1growth
+) #Sub
+
+g1TotM1GenSub <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varComb(varIdent(form = ~ 1 |
+                               Genus), varIdent(form = ~ 1 |
+                                                  Sub)),
+  method = "REML",
+  data = totg1growth
+) #GenusSub
+
+g1TotM1Block <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varIdent(form = ~ 1 |
+                       Block),
+  method = "REML",
+  data = totg1growth
+) #Block
+
+g1TotM1GenBlock <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varComb(varIdent(form = ~ 1 |
+                               Genus), varIdent(form = ~ 1 |
+                                                  Block)),
+  method = "REML",
+  data = totg1growth
+) #GenBlock
+
+g1TotM1SubBlock <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varComb(varIdent(form = ~ 1 |
+                               Sub), varIdent(form = ~ 1 |
+                                                Block)),
+  method = "REML",
+  data = totg1growth
+) #SubBlock
+
+g1TotM1GenSubBlock <- gls(
+  Totmass ~ Genus * Sub + Block,
+  weights = varComb(
+    varIdent(form = ~ 1 |
+               Genus),
+    varIdent(form = ~ 1 |
+               Sub),
+    varIdent(form = ~ 1 |
+               Block)
+  ),
+  method = "REML",
+  data = totg1growth
+) #GenSubBlock
+
+anova(g1TotM1, g1TotM1Gen)
+anova(g1TotM1, g1TotM1Sub)
+anova(g1TotM1, g1TotM1GenSub)
+anova(g1TotM1, g1TotM1Block)
+anova(g1TotM1, g1TotM1SubBlock)
+anova(g1TotM1, g1TotM1GenBlock)
+anova(g1TotM1, g1TotM1GenSubBlock)
+```
+
+sort the AICs for easier visualization of best
+
+```{r}
+myg1totaics <- AIC(
+  g1TotM1,
+  g1TotM1Gen,
+  g1TotM1Sub,
+  g1TotM1GenSub,
+  g1TotM1Block,
+  g1TotM1SubBlock,
+  g1TotM1GenBlock,
+  g1TotM1GenSubBlock
+)
+myg1totaics[order(myg1totaics$AIC), ]
+```
+
+So best one is het variances by Sub and genus
+
+```{r}
+summary(g1TotM1GenSub)
+anova(g1TotM1GenSub)
+finmodg1tot <- g1TotM1GenSub
+```
+
+When we account for the heterogeneous variances, we do see an interaction.
+
+##### Normality of residuals
+
+```{r}
+hist(resid(finmodg1tot, type = "normalized"))
+plot(fitted(finmodg1tot), resid(finmodg1tot, type = "normalized"))
+abline(h = 0, lty = 2)
+```
+
+These look alright.
+
+#### Plot Means and Standard Errors
+
+```{r}
+my_colors <- c("gold", "goldenrod2", "chartreuse3", "skyblue3")
+my_shapes <- c(18, 15, 17, 16)
+
+plotg1tot <- ggplot(totg1growth, aes(Sub, Totmass)) +
+  scale_color_manual(values = my_colors) +
+  scale_shape_manual(values = my_shapes) +
+  geom_point(
+    aes(color = Substrate, shape = Substrate),
+    alpha = 0.75,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun.y = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2.5
+  ) +
+  theme_bw()
+
+plotg1totlab <- plotg1tot +
+  labs(x = "Substrate", y = "Total Biomass (g)")
+plotg1totlabfacet <- plotg1totlab +
+  facet_wrap( ~ Genus)
+
+plotg1totlabfacet
+```
+
+#### Total Drymass Tukey tests
+
+In our model, the interaction term is significant, indicating that we should perform the Tukey tests separately by species. As above, we will create a complex category.
+
+```{r}
+totg1growth$GenusSub <- factor(paste(totg1growth$Genus, totg1growth$Sub, sep = "_"))
+
+finmodg1tot2 <- gls(
+  Totmass ~ GenusSub + Block,
+  weights = varComb(varIdent(form = ~ 1 |Genus), 
+                    varIdent(form = ~ 1 |Sub)),
+  method = "REML",
+  data = totg1growth
+)
+```
+
+```{r}
+summary(glht(finmodg1tot2, linfct = mcp(
+  GenusSub = c(
+    "Sporobolus_C-Sporobolus_F=0",
+    "Sporobolus_M-Sporobolus_F=0",
+    "Sporobolus_D-Sporobolus_F=0",
+    "Sporobolus_M-Sporobolus_C=0",
+    "Sporobolus_D-Sporobolus_C=0",
+    "Sporobolus_D-Sporobolus_M=0",
+    "Zizaniopsis_C-Zizaniopsis_F=0",
+    "Zizaniopsis_M-Zizaniopsis_F=0",
+    "Zizaniopsis_D-Zizaniopsis_F=0",
+    "Zizaniopsis_M-Zizaniopsis_C=0",
+    "Zizaniopsis_D-Zizaniopsis_C=0",
+    "Zizaniopsis_D-Zizaniopsis_M=0",
+    "Salix_C-Salix_F=0",
+    "Salix_M-Salix_F=0",
+    "Salix_D-Salix_F=0",
+    "Salix_M-Salix_C=0",
+    "Salix_D-Salix_C=0",
+    "Salix_D-Salix_M=0"
+  )
+)))
+```
+
+Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, b; Salix: a, b, b, b
+
+#### Total Collective Summary
+
+```{r}
+anova(g1TotM1GenSub)
+G1TotSummary <- "For combined biomass, there is an interactive effect of genus and Substrate F[6,87]=2.6684, p = 0.0.0200), as well as the main effects of each (F[2,87]= 41.8648, p<0.0001; F[3,87]=25.2411, p<0.0001).g1TotM1GenSub. Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, b; Salix: a, b, b, b"
+```
+
+### Final G1 Collective Results
+
+#### AG
+
+```{r}
+anova(finmodg1ag, type = "marginal")
+G1AGSummary
+plotg1ag
+plotg1aglab
+plotg1aglabfacet
+# ggsave(
+#   filename = "./Figures/plotg1aglabfacetcolor.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 7,
+#   height = 3,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+summary(glht(finmodg1ag, linfct = mcp(Sub = "Tukey")))
+```
+
+#### BG
+
+```{r}
+anova(finmodg1bg, type = "marginal")
+G1BGSummary
+plotg1BG
+plotg1BGlab
+plotg1BGlabfacet
+# ggsave(
+#   filename = "./Figures/plotg1bglabfacetcolor.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 7,
+#   height = 3,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+summary(glht(finmodg1bg, linfct = mcp(Sub = "Tukey")))
+```
+
+#### Total
+
+```{r}
+anova(finmodg1tot, type = "marginal")
+G1TotSummary
+plotg1totlab
+plotg1totlabfacet
+# ggsave(
+#   filename = "./Figures/plotg1totlabfacetcolor.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 7,
+#   height = 3,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+summary(glht(finmodg1tot, linfct = mcp(Sub = "Tukey")))
+```
+
+\newpage
+
+## Experiment 2
+
+### Data Description
+
+| Column Name | Description |
+|-------------------------|-----------------------------------------------|
+| ID | IDs were assigned to mesocosms based on position in greenhouse. 60 of the original 120 mesocosms were excluded from this publication, as they were testing a separate factor. |
+| SciName | Genus and species name |
+| CommonName | Common name |
+| Species | A two-letter abbreviation of the common name. |
+| Substrate | Corresponds to soil type in the paper. G = mid-range glass mix, M = mid-range glass/dredge mix, D = dredge. |
+| XG | N = No additional treatment. |
+| Trt_ID | Concatenation of Substrate, XG, and ID fields. |
+| Block | Ten blocks in the experiment, each with one of each Species/Substrate combination. |
+| DatePlanted | mm/dd/yyyy. |
+| Survival | Alive = Plant survived. Dead = Plant died. |
+| DateMeasured_Initial | Initial measurements of plants, after ensuring they established. mm/dd/yyyy. |
+| TotalStems_Initial | Number of bulrush "stems" at initial measurement. EM counted all stems, even brown. Many of the shoots had died back and measuring only the living ones would underestimate the current biomass. |
+| Height_cm_Initial | Height from soil level to tip of longest shoot. Soil level was marked with wite out for future use. EM decided to measure longest stem even if brown. This is because many of the shoots were dying back, and measuring the longest green stem would produce an underestimate of total initial biomass. |
+| Condition_1-5_Initial | 1- brown, 2- mostly brown, 3- half green, 4- mostly green, 5- basically all green. |
+| Notes_InitialMeasurement | Notes taken during the initial measurements. |
+| DateMeasured_Mid | Second measurement date. "Mid" refers to the fact that it is between initial and final measurements for the bulrush. The baldcypress were grown for longer. mm/dd/yyyy. |
+| NumGreenStems_Mid | Number of stems with any green left. |
+| NumBrownStems_Mid | Number of stems with no green left. |
+| TotalStems_Mid | NumGreenStems_Mid+NumBrownStems_Mid. |
+| Height_cm_Mid | Base of Wite-Out to tip of tallest shoot/meristem. |
+| Diameter_mm_Mid | Only taken for baldcypress. Diameter in mm of each sample, measured just above a wite-out mark. It was not possible to measure the diameter below the rim of the pot. Thus, the wite-out mark for diameter was made at 9cm from the base wite-out that is used for the height. |
+| Condition_1-5_Mid | 1- brown 2- mostly brown 3- half green 4- mostly green 5- basically all green |
+| Notes_Mid | Notes at the time of midgrowth measurements. |
+| DateMeasured_Spring | Date spring measurements were taken.. mm/dd/yyyy. |
+| NumGreenStems_Spring | Number of bulrush shoots with at least some green/Number of baldcypress branches with at least some green. This measurement involved some judgment calls. Buds on the side of the baldcypresses were counted. |
+| NumBrownStems_Spring | Number of bulrush shoots and baldcypress branches that did not have green growth. Very dry, greyish old leaves were not counted as green for the baldcypress at this time. Only bright or dark green. |
+| TotalStems_Spring | Total number of stems (green plus brown) |
+| Height_cm_Spring | Height in centimeters of each sample, measured from the top of the wite-out mark to the tip of the longest green shoot or branch. |
+| Diameter_mm_Spring | Only taken for baldcypress. Diameter in mm of each sample, measured just above a wite-out mark. It was not possible to measure the diameter below the rim of the pot. Thus, the wite-out mark for diameter was made at 9cm from the base wite-out that is used for the height. |
+| Condition_1-5_Spring | 1- brown 2- mostly brown 3- half green 4- mostly green 5- basically all green |
+| Notes_Spring | Notes made during spring measurements |
+| DateMeasured_June | mm/dd/yyyy. |
+| NumGreenStems_June |  |
+| NumBrownStems_June |  |
+| TotalStems_June |  |
+| Height_cm_June |  |
+| Diameter_mm_June |  |
+| Condition_1-5_June |  |
+| Notes_June |  |
+| DateMeasured_August | mm/dd/yyyy. |
+| WoodyStems_August |  |
+| Height_cm_August |  |
+| Diameter_mm_August |  |
+| Condition_1-5_August |  |
+| Notes_August |  |
+| DateMeasured_September |  |
+| WoodyStems_September |  |
+| Height_cm_September |  |
+| Diameter_mm_September |  |
+| Condition_1-5_September |  |
+| Notes_September |  |
+| DateMeasured_WM | Date that the wet mass of the plant was measured. Also is the date of harvest and initial subsampling. mm/dd/yyyy. |
+| AGWetmass_g | Mass in grams of live/green aboveground growth, immediately after harvest. This does not include the tips of shoots that had been burned by lights or had otherwise entirely dried out and gone brown. Shoots were cut off down at the rhizome where they emerged from. |
+| AGCorrectedWetmass_g | SubtractsAGContamination_g from AGWetmass_g. Used in TotWetmassCorrected_g |
+| BGWetmass_g | Mass in grams of live (not black and rotted) belowground growth, immediately after harvesting and rinsing. This includes rhizomes and roots, as well as shoots that never broke the surface. This measurement was taken in the greenhouse on the day of harvest. Some samples were farther processed to remove dead BG matter and substrates that weren't fully rinsed off in the greenhouse. |
+| Notes_WM | Notes, mostly taken by the person weighing the plants. Some of the notes from lab processing were added here as well. |
+| DeadRemoved_g | Mass in grams of black and rotted roots and portions of rhizome, removed from the initial BG sample. They do not contribute to dry weight. They were not subsampled for ITS or microscopy. |
+| BGRinseweight_g | Some of the samples that came to the lab from the greenhouse needed further rinsing. This is the weight of those samples after they have been rinsed and after dead matter was removed. It includes the subsample weight in it. It can be used as a replacement for BGWetmass_g |
+| BGCorrectedWetmass_g | Subtracts BGContamination_g from BGRinseweight_g, if the sample was reweighed during the initial subsampling, or from BGWetmass_g if the sample was not reweighed. |
+| Subsample_g | The mass in g of live (not black/rotted) roots subsampled for ITS and microscopy. |
+| BGPredryCorrected_g | Subtracts Subsample_g from BGCorrectedWetmass_g. Represents the amount of BG sample that went into the drying oven. |
+| Subsampled_by | Several lab members and volunteers worked to subsample the roots. In case of differing methods, they are noted here. IY=Iker Ytturalde, SVB=Sunshine Van Bael, EM=Elizabeth MacDougal, and LK=Lee Kaufman |
+| TotWetmassCorrected_g | Adds BGCorrectedWetmass_g to AGCorrectedWetmass_g to represent the total mass of each sample before drying. |
+| TotPredryCorrected_g | Subtracts Subsample_g from TotWetmassCorrected_g. Represents the total mass that went into the drying oven, for each sample. |
+| DateMeasured_DM_BG | Date that the dry mass of this plant was measured. |
+| BGDrymass_Dirty_g | Mass of dried belowground matter and all substrates within the bag. This is everything that was weighed for the BGWetmass_g (or BGRinseweight if applicable). |
+| BGDrymass_Clean_g | Mass of dried belowground matter after removing all substrates. |
+| BGContamination_g | Difference between BGDrymass_Dirty_g and BGDrymass_Clean_g. Represents the amount of soil that was removed from the dried samples. Is used as a correction factor in a few of the wetmass columns, as the wetmass was weighed before the soil was removed from the sample. |
+| BGDryWetRatio | Ratio between BGDrymass_Clean_g and BGPredryCorrected_g. Used to estimate the dry biomass of the subsample that was removed from the wetmass. |
+| BGDrySubsample_Estimated_g | Multiplies Subsample_g by BGDryWetRatio to estimate the dry mass of the subsample. |
+| BGFullDrymass_Estimated_g | Adds BGDrySubsample_Estimated_g to BGDrymass_Clean_g to estimate what the total BG drymass would be if the subsample hadn't been removed. |
+| DateMeasured_DM_AG |  |
+| AGDrymass_Dirty_g | Mass of dried aboveground matter and all substrates within the bag. This is everything that was weighed for the AGWetmass_g (except for the samples that had been test-weighed, which lost some of their original sediment, if they had any). |
+| AGDrymass_Clean_g | Mass of dried aboveground matter after picking it out from the substrates. |
+| AGContamination_g | Difference between AGDrymass_Dirty_g and AGDrymass_Clean_g. Represents the amount of soil that was removed from the dried samples. Is used as a correction for AGCorrectedWetmass_g. Not available for all samples, as some were test-weighed during the drying process, and the discarded soil was not weighed at the time. |
+| AGDryWetRatio | Ratio between AGDrymass_Clean_g and AGCorrectedWetmass_g. |
+| TotDrymass_Estimated_g | Sum of BGFullDrymass_Estimated_g and AGDrymass_Clean_g. Estimate of the total dry biomass of the given sample, accounting for contamination and subsampling. |
+| Notes_DM | Notes taken while weighing dried biomass. |
+
+### Data Prep
+
+#### Assign Data to a Variable
+
+```{r}
+g2growth <- read.csv("Biomass_Experiment2.csv", stringsAsFactors = T)
+#use strings as factors = T, it makes them factors not characters 
+```
+
+#### Straighten up the data
+
+Filter out dead species
+
+```{r}
+g2growth <- g2growth %>%
+  filter(Survival != "Dead")
+```
+
+Use structure function to view how each variable (column) is categorized.
+
+```{r, echo=FALSE}
+str(g2growth)
+```
+
+Some of my columns were the wrong data type. The following code reassigns data types and orders factors.
+
+```{r}
+g2growth$Block <- factor(g2growth$Block,
+                         levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))
+g2growth$Substrate <-
+  factor(g2growth$Substrate, levels = c("G", "M", "D"))
+#The levels portion here specifies the order I want for this variable.
+```
+
+Separate by species for down the line.
+
+```{r}
+bcgrowth <- g2growth %>%
+  filter(Species == "BC")
+gbgrowth <- g2growth %>%
+  filter(Species == "GB")
+```
+
+#### Replicates
+
+```{r}
+bcgrowth %>%
+  count(Substrate)
+
+gbgrowth %>%
+  count(Substrate)
+```
+
+Three of my GB had died: two in Glass and one in Mix.
+
+```{r}
+#Totals
+g2Totmass <- g2growth %>%
+  filter(!is.na(TotDrymass_Estimated_g))
+
+totGB <- g2Totmass %>%
+  filter(Species == "GB")
+
+totBC <- g2Totmass %>%
+  filter(Species == "BC")
+
+#Aboveground
+g2AGmass <- g2growth %>%
+  filter(!is.na(AGDrymass_Clean_g))
+
+AGGB <- g2AGmass %>%
+  filter(Species == "GB")
+
+AGBC <- g2AGmass %>%
+  filter(Species == "BC")
+
+#Belowground
+g2BGmass <- g2growth %>%
+  filter(!is.na(BGFullDrymass_Estimated_g))
+
+BGGB <- g2BGmass %>%
+  filter(Species == "GB")
+
+BGBC <- g2BGmass %>%
+  filter(Species == "BC")
+```
+
+#### Looking for initial biases
+
+##### Baldcypress
+
+First I will confirm that the initial plant heights were comparable across assigned treatments.
+
+```{r}
+boxplot(
+  bcgrowth$Height_cm_Initial ~ bcgrowth$Substrate,
+  ylab = "Initial Height in cm",
+  xlab = "Substrate",
+  main = "Baldcypress initial height by substrate"
+)
+
+boxplot(
+  bcgrowth$Height_cm_Initial ~ bcgrowth$Block,
+  ylab = "Initial Height in cm",
+  xlab = "Substrate",
+  main = "Baldcypress initial height by block"
+)
+```
+
+No clear differences in initial height of BCs planted in each substrate.
+
+##### Giant Bulrush
+
+I'll look for differences in the initial height of plants based on substrate they were assigned to.
+
+```{r}
+boxplot(
+  gbgrowth$Height_cm_Initial ~ gbgrowth$Substrate,
+  ylab = "Initial Height in cm",
+  xlab = "Substrate",
+  main = "Giant bulrush initial height by substrate"
+)
+
+boxplot(
+  gbgrowth$Height_cm_Initial ~ gbgrowth$Block,
+  ylab = "Initial Height in cm",
+  xlab = "Substrate",
+  main = "Giant bulrush initial height by block"
+)
+
+```
+
+Next, I will look at the stem count
+
+```{r}
+boxplot(
+  gbgrowth$TotalStems_Initial ~ gbgrowth$Substrate,
+  ylab = "Initial Number of Stems",
+  xlab = "Substrate",
+  main = "Giant bulrush initial stem count"
+)
+
+boxplot(
+  gbgrowth$TotalStems_Initial ~ gbgrowth$Block,
+  ylab = "Initial Number of Stems",
+  xlab = "Substrate",
+  main = "Giant bulrush initial stem count by block"
+)
+
+```
+
+No clear difference in GB initial height across substrates. There are two outlying tall individuals in the dredge.
+
+### AG Collective Drymass
+
+#### Model Selection
+
+We'll start with the full model, and test whether there is an interaction.
+
+```{r}
+#Interaction
+g2AGM1 <-
+  gls(
+    AGDrymass_Clean_g ~ Species * Substrate + Block,
+    method = "REML",
+    data = g2AGmass
+  )
+anova(g2AGM1)
+
+#No interaction
+g2AGM1b <-
+  gls(
+    AGDrymass_Clean_g ~ Species + Substrate + Block,
+    method = "REML",
+    data = g2AGmass
+  )
+anova(g2AGM1b)
+
+anova(g2AGM1,g2AGM1b)
+```
+
+There is no interaction in our base model, but the model that includes the interaction term has a lower AIC so we will proceed with that one.
+
+#### Validation
+
+##### Heterogeneous Variances
+
+We will perform Levene's test to determine whether we need to account for heterogeneous variances:
+
+```{r}
+leveneTest(AGDrymass_Clean_g ~ Species * Substrate, data = g2AGmass)
+```
+
+The variances are homogeneous, so we don't need to account for heterogeneous variances.
+
+##### Chosen Model
+
+```{r}
+anova(g2AGM1, type = "marginal")
+summary(g2AGM1)
+finmodg2AG <- g2AGM1
+```
+
+In this model that does not account for heterogeneous variances of treatments, there is a main effect of substrate but only a marginal interaction between species and substrate.
+
+##### Normality of Residuals
+
+```{r}
+hist(resid(finmodg2AG, type = "normalized"))
+plot(fitted(finmodg2AG),
+     resid(finmodg2AG, type = "normalized"))
+abline(h = 0, lty = 2)
+```
+
+These look pretty good.
+
+#### Plot Means and Standard Errors
+
+```{r}
+my_colors <- c("goldenrod2","chartreuse3","skyblue3")
+my_shapes <- c(15, 17, 16)
+
+plotg2ag <- ggplot(g2growth, aes(Substrate, AGDrymass_Clean_g)) +
+  scale_color_manual(values = my_colors) +
+  scale_shape_manual(values = my_shapes) +
+  geom_point(aes(color = Substrate, shape = Substrate),
+    alpha = .75,
+    fill = "NA",
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.y = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2,
+    show.legend = FALSE
+  ) +
+  theme_bw()
+
+plotg2aglab <- plotg2ag +
+  labs(x = "Substrate", y = "AG Biomass (g)")
+plotg2aglabfacet <- plotg2aglab 
+
+plotg2aglabfacet <- plotg2aglab +
+  facet_wrap(~Species)
+plotg2aglabfacet
+ggsave(
+  filename = "./Figures/plotg2aglabfacetcolorwide.pdf",
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = 6,
+  height = 2.5,
+  units = c("in"),
+  dpi = 600,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
+
+#### AG drymass Tukey tests
+
+In our model, the interaction term is not significant. We do not need to do Tukey tests separately by species, but for consistency with other plots we will. We'll achieve this by creating a complex category of species and substrate.
+
+```{r}
+g2AGmass$Spp_Sub <-
+  factor(paste(g2AGmass$Species, g2AGmass$Substrate, sep = "_"))
+g2AGmass$Spp_Sub <-
+  factor(g2AGmass$Spp_Sub,
+         levels = c("GB_G", "GB_M", "GB_D", "BC_G", "BC_M", "BC_D"))
+
+finmodg2AG2 <-
+  gls(
+    AGDrymass_Clean_g ~ Spp_Sub + Block,
+    method = "REML",
+    data = g2AGmass
+  )
+anova(finmodg2AG, finmodg2AG2)
+plot(fitted(finmodg2AG), fitted(finmodg2AG2))
+```
+
+Residuals line up. These models are essentially the same.
+
+```{r}
+summary((glht(finmodg2AG2, linfct = mcp(
+  Spp_Sub = c(
+    "GB_M-GB_G= 0",
+    "GB_D-GB_G=0",
+    "GB_D-GB_M=0",
+    "BC_M-BC_G= 0",
+    "BC_D-BC_G=0",
+    "BC_D-BC_M=0"
+  )
+))))
+```
+
+GB: a, b, b; BC: a, a, a
+
+#### G2 AG Summary
+
+```{r}
+finmodg2AG <- g2AGM1
+anova(finmodg2AG, type = "marginal")
+summary(finmodg2AG)
+g2AGSummary <- "best AG dry biomass model includes a main effect of substrate (F[2,42]=	3.26278, 0.0482) and a marginal interaction between species and substrate (F[2,42]=	3.09159, p=0.0559), and accounts for no heterogeneous variance. GB: a, b, b; BC: a, a, a. IF WE ACCOUNT FOR HETEROGENEOUS VARIANCE, THEN WE SEE AN INTERACTION BETWEEN SPECIES AND SUBSTRATE. THE LOWEST AIC MODEL DOES ACCOUNT FOR HET VAR."
+```
+
+### BG Drymass
+
+#### Model Selection
+
+start with including block, just because we know that greenhouses vary in light reaching different parts. Always start with all fixed effects (including interaction)
+
+```{r}
+g2BGM1 <-
+  gls(
+    BGFullDrymass_Estimated_g ~ Species * Substrate + Block,
+    method = "REML",
+    data = g2BGmass
+  )
+anova(g2BGM1)
+```
+
+No significant interaction found in the base model.
+
+Let's compare the model with and without the interaction term:
+
+```{r}
+g2BGM2 <- gls(
+    BGFullDrymass_Estimated_g ~ Species + Substrate + Block,
+    data = g2BGmass
+  )
+anova(g2BGM1,g2BGM2)
+```
+
+The model that contains the interaction term has a lower AIC, so we'll proceed with the interaction term.
+
+#### Validation
+
+##### Heterogeneous Variances
+
+We will perform Levene's test to determine whether we need to account for heterogeneous variances:
+
+```{r}
+leveneTest(BGFullDrymass_Estimated_g ~ Species * Substrate, data = g2BGmass)
+```
+
+The terms are not heterogeneous, so we will not account for heterogeneity in our model.
+
+##### Chosen Model
+
+```{r}
+anova(g2BGM1, type = "marginal")
+summary(g2BGM1)
+finmodg2bg <- g2BGM1
+```
+
+According to this model, g2BGM1, there is only a significant difference of species, not of substrate or interaction.
+
+##### Normality of Residuals
+
+```{r}
+hist(resid(finmodg2bg, type = "normalized"))
+plot(fitted(finmodg2bg), resid(finmodg2bg, type = "normalized"))
+abline(h = 0, lty = 2)
+```
+
+Model is fine.
+
+#### Plot Means and Standard Errors
+
+```{r}
+plotg2bg <- ggplot(g2growth, aes(Substrate, BGDrymass_Clean_g)) +
+  scale_color_manual(values = my_colors) +
+  scale_shape_manual(values = my_shapes) +
+  geom_point(aes(color = Substrate, shape = Substrate),
+    alpha = .75,
+    fill = "NA",
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.y = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2,
+    show.legend = FALSE
+  ) +
+  theme_bw()
+
+plotg2bglab <- plotg2bg +
+  labs(x = "Substrate", y = "BG Biomass (g)")
+plotg2bglab
+
+# ggsave(
+#   filename = "./Figures/plotg2bglabcolorwide.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 6,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+plotg2bglabfacet <- plotg2bglab +
+  facet_wrap(~Species)
+
+plotg2bglabfacet
+
+# ggsave(
+#   filename = "./Figures/plotg2bglabfacetcolorwide.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 6,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+```
+
+#### BG Drymass Tukey Tests
+
+There is no interaction, so separating out by species is not necessary, but we can do this for consistency:
+
+```{r}
+finmodg2bg2 <- gls(
+    BGFullDrymass_Estimated_g ~ Species + Substrate + Block,
+  method = "REML",
+  data = g2BGmass
+)
+
+summary(glht(finmodg2bg2, linfct = mcp(Substrate = "Tukey")))
+#No diffs between soil types if we take out interaction term.
+
+summary(glht(finmodg2bg, linfct = mcp(Substrate = "Tukey")))
+#No diffs between soil types if we don't separate by species
+
+g2BGmass$Spp_Sub <-
+  factor(paste(g2BGmass$Species, g2BGmass$Substrate, sep = "_"))
+g2BGmass$Spp_Sub <-
+  factor(g2BGmass$Spp_Sub,
+         levels = c("GB_G", "GB_M", "GB_D", "BC_G", "BC_M", "BC_D"))
+
+finmodg2bg3 <-
+  gls(
+    BGFullDrymass_Estimated_g ~ Spp_Sub + Block,
+    method =
+      "REML",
+    data = g2BGmass
+  )
+anova(finmodg2bg2,finmodg2bg3)
+plot(fitted(finmodg2bg), fitted(finmodg2bg3))
+```
+
+These models are very alike. The residuals line up. I will use the model with the complex variable for my Tukey test.
+
+```{r}
+summary((glht(finmodg2bg3, linfct = mcp(
+  Spp_Sub = c(
+    "GB_M-GB_G= 0",
+    "GB_D-GB_G=0",
+    "GB_D-GB_M=0",
+    "BC_M-BC_G= 0",
+    "BC_D-BC_G=0",
+    "BC_D-BC_M=0"
+  )
+))))
+```
+
+According to this, there are no differences between treatments.
+
+#### G2 BG Summary
+
+```{r}
+anova(finmodg2bg)
+g2BGSummary <- "Effect of species only (F[1,42] = 5.00201, p = 0.0307). Model with interaction has lower AIC so was used anyhow.Variances homogeneous. g2BGM1SppSub: a, a, a. GB: a, a, a."
+```
+
+### Total Drymass
+
+#### Model Selection
+
+start with including block, just because we know that greenhouses vary in light reaching different parts. always start with all fixed effects (including interaction)
+
+```{r}
+g2TotM1 <-
+  gls(
+    TotDrymass_Estimated_g ~ Species * Substrate + Block,
+    method = "REML",
+    data = g2Totmass
+  )
+anova(g2TotM1)
+```
+
+NO interaction between species and substrate, or main effects.
+
+Looking at the model without the interaction term:
+
+```{r}
+g2TotM2 <-
+  gls(
+    TotDrymass_Estimated_g ~ Species + Substrate + Block,
+    method = "REML",
+    data = g2Totmass
+  )
+
+anova(g2TotM1, g2TotM2)
+```
+
+Model with interaction term has a lower AIC, so we will keep it in.
+
+#### Model Selection
+
+##### Heterogeneous Variances
+
+We will perform Levene's test to determine whether we need to account for heterogeneous variances:
+
+```{r}
+leveneTest(TotDrymass_Estimated_g ~ Species * Substrate, data = g2Totmass)
+```
+
+Variances homogeneous, so we will use our base model, g2TotM1.
+
+##### Chosen Model
+
+```{r}
+finmodg2tot <- g2TotM1
+anova(finmodg2tot)
+```
+
+##### Normality of Residuals
+
+```{r}
+hist(resid(g2TotM1, type = "normalized"))
+plot(fitted(g2TotM1),
+     resid(g2TotM1, type = "normalized"))
+abline(h = 0, lty = 2)
+```
+
+Skewed right a bit, but not obviously bimodal or some other distribution than normal.
+
+#### Plot Means and Standard Errors
+
+```{r}
+plotg2tot <- ggplot(g2growth, aes(Substrate, TotDrymass_Estimated_g)) +
+  scale_color_manual(values = my_colors) +
+  scale_shape_manual(values = my_shapes) +
+  geom_point(aes(color = Substrate, shape = Substrate),
+    alpha = .75,
+    fill = "NA",
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1,
+    show.legend = FALSE
+  ) +
+  stat_summary(
+    fun.y = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2,
+    show.legend = FALSE
+  ) +
+  theme_bw()
+
+plotg2totlab <- plotg2tot +
+  labs(x = "Substrate", y = "Total Biomass (g)")
+plotg2totlabfacet <- plotg2totlab +
+  facet_wrap(~Species)
+
+plotg2totlabfacet
+# ggsave(
+#   filename = "./Figures/plotg2totlabfacetcolorwide.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 6,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+```
+
+#### Total Drymass Tukey tests
+
+Despite the lack of interactive effect, we will run the Tukey with a complex species substrate term, for consistency.
+
+```{r}
+g2Totmass$Spp_Sub <-
+  factor(paste(g2Totmass$Species, g2Totmass$Substrate, sep = "_"))
+g2Totmass$Spp_Sub <-
+  factor(g2Totmass$Spp_Sub,
+         levels = c("GB_G", "GB_M", "GB_D", "BC_G", "BC_M", "BC_D"))
+
+finmodg2tot2 <- gls(
+    BGFullDrymass_Estimated_g ~ Spp_Sub + Block,
+  method = "REML",
+  data =
+    g2Totmass
+) 
+
+summary((glht(finmodg2tot2, linfct = mcp(
+  Spp_Sub = c(
+    "GB_M-GB_G=0",
+    "GB_D-GB_G=0",
+    "GB_D-GB_M=0",
+    "BC_M-BC_G=0",
+    "BC_D-BC_G=0",
+    "BC_D-BC_M=0"
+  )
+))))
+```
+
+GB: a, a, a; BC: a, a, a
+
+Neither species responds differently to the substrate.
+
+#### Total Drymass Summary
+
+```{r}
+anova(finmodg2tot, type = "marginal")
+g2TotSummary <- "The chosen model has homogeneous variances and no main or interactive effects. g2TotM1. GB: a, a, a; BC: a, a, a."
+```
+
+## Experiment 2 Final Results Summary
+
+```{r}
+g2AGSummary
+
+g2BGSummary
+
+g2TotSummary
+```
+
+<!-- # Block as a Random Effect -->
+
+<!-- The following analyses treat block as a random effect, rather than a main effect as above. -->
+
+<!-- ### AG Collective Drymass -->
+
+<!-- #### Model Selection -->
+
+<!-- start with including block, just because we know that greenhouses vary -->
+
+<!-- in light reaching different parts. always start with all fixed effects -->
+
+<!-- (including interaction) -->
+
+<!-- ```{r} -->
+
+<!-- g1AGM1 <- -->
+
+<!-- lme( -->
+
+<!--     AGDrymass_g ~ Genus * Sub, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g1AGmass -->
+
+<!--   ) -->
+
+<!-- anova(g1AGM1) -->
+
+<!-- g1AGM1b <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_g ~ Genus + Sub, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g1AGmass -->
+
+<!--   ) -->
+
+<!-- anova(g1AGM1b) -->
+
+<!-- ``` -->
+
+<!-- Genus and Substrate are both important factors for how the plants -->
+
+<!-- respond. There is no interaction between genus and Substrate. -->
+
+<!-- As a practice, we are keeping the random block effect. Even so, we can -->
+
+<!-- check whether it is large: -->
+
+<!-- ```{r} -->
+
+<!-- g1AGM2 <- gls(AGDrymass_g ~ Genus * Sub, method = "REML", data = g1AGmass) -->
+
+<!-- g1AGM2b <- gls(AGDrymass_g ~ Genus + Sub, method = "REML", data = g1AGmass) -->
+
+<!-- anova(g1AGM1, g1AGM2) -->
+
+<!-- anova(g1AGM1b, g1AGM2b) -->
+
+<!-- ``` -->
+
+<!-- It is not large. -->
+
+<!-- Also, while the interaction between genus and Sub is not significant, -->
+
+<!-- the model with the interaction term has a lower AIC so that will be -->
+
+<!-- used. -->
+
+<!-- #### Fit heterogeneous variances -->
+
+<!-- ```{r} -->
+
+<!-- g1AGM1 <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) -->
+
+<!-- g1AGM1Gen <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Genus), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #Genus -->
+
+<!-- g1AGM1Sub <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Sub), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #Sub -->
+
+<!-- g1AGM1Block <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Block), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #Block -->
+
+<!-- g1AGM1GenSub <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 |Genus),  -->
+
+<!--     varIdent(form = ~ 1 |Sub)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #GenusSub -->
+
+<!-- g1AGM1GenBlock <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 |Genus),  -->
+
+<!--     varIdent(form = ~ 1 |Block)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #GenusBlock -->
+
+<!-- g1AGM1SubBlock <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 |Sub),  -->
+
+<!--     varIdent(form = ~ 1 |Block)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #SubstrateBlock -->
+
+<!-- g1AGM1GenSubBlock <- lme( -->
+
+<!--   AGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Genus), -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Sub), -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Block) -->
+
+<!--   ), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) #GenusSubBlock -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- anova(g1AGM1, g1AGM1Gen)  -->
+
+<!-- anova(g1AGM1,g1AGM1Sub)  -->
+
+<!-- anova(g1AGM1Gen, g1AGM1GenSub)  -->
+
+<!-- anova(g1AGM1, g1AGM1Block) -->
+
+<!-- anova(g1AGM1Gen, g1AGM1GenBlock) -->
+
+<!-- anova(g1AGM1Sub, g1AGM1SubBlock) -->
+
+<!-- anova(g1AGM1GenSub, g1AGM1GenSubBlock) -->
+
+<!-- ``` -->
+
+<!-- sort the AICs for easier visualization of best -->
+
+<!-- ```{r} -->
+
+<!-- myg1agaics <- AIC( -->
+
+<!--   g1AGM1, -->
+
+<!--   g1AGM1Gen, -->
+
+<!--   g1AGM1Sub, -->
+
+<!--   g1AGM1GenSub, -->
+
+<!--   g1AGM1Block, -->
+
+<!--   g1AGM1GenBlock, -->
+
+<!--   g1AGM1SubBlock, -->
+
+<!--   g1AGM1GenSubBlock -->
+
+<!-- ) -->
+
+<!-- myg1agaics[order(myg1agaics$AIC), ] -->
+
+<!-- ``` -->
+
+<!-- Lowest AIC is heterogeneous variances by genus and Substrate -->
+
+<!-- ```{r} -->
+
+<!-- finmodg1ag <- g1AGM1GenSub -->
+
+<!-- anova(finmodg1ag) -->
+
+<!-- summary(finmodg1ag) -->
+
+<!-- ``` -->
+
+<!-- #### Validation -->
+
+<!-- ```{r} -->
+
+<!-- hist(resid(finmodg1ag, type = "normalized")) -->
+
+<!-- plot(fitted(finmodg1ag), resid(finmodg1ag, type = "normalized")) -->
+
+<!-- abline(h = 0, lty = 2) -->
+
+<!-- lines(smooth.spline(fitted(finmodg1ag), residuals(finmodg1ag))) -->
+
+<!-- ``` -->
+
+<!-- These look just fine. -->
+
+<!-- #### Plot Means and Standard Errors -->
+
+<!-- ```{r} -->
+
+<!-- my_colors <- c("gold","goldenrod2","chartreuse3","skyblue3") -->
+
+<!-- my_shapes <- c(18, 15, 17, 16) -->
+
+<!-- plotg1ag <- ggplot(g1AGmass, aes(Sub, AGDrymass_g)) + -->
+
+<!--   geom_point(aes(color=Substrate, shape=Substrate), -->
+
+<!--     alpha = 0.75, -->
+
+<!--     position = position_jitter(height = 0, width = 0.2), -->
+
+<!--     size = 1.5, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   scale_color_manual(values = my_colors) + -->
+
+<!--   scale_shape_manual(values = my_shapes) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.data = mean_se, -->
+
+<!--     geom = "errorbar", -->
+
+<!--     width = 0.2, -->
+
+<!--     colour = "black", -->
+
+<!--     alpha = 1 -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun = mean, -->
+
+<!--     geom = "point", -->
+
+<!--     fill = "black", -->
+
+<!--     pch = 21, -->
+
+<!--     size = 2.5 -->
+
+<!--   ) + -->
+
+<!--   theme_bw() -->
+
+<!-- plotg1aglab <- plotg1ag + -->
+
+<!--   labs(x = "Substrate", y = "AG Biomass (g)") -->
+
+<!-- plotg1aglabfacet <- plotg1aglab + -->
+
+<!--   facet_wrap(~Genus) -->
+
+<!-- plotg1aglabfacet -->
+
+<!-- ``` -->
+
+<!-- #### AG drymass Tukey tests -->
+
+<!-- In our model, the interaction term is not significant, so there is no -->
+
+<!-- need to do tukey tests separately by species. The most correct way of -->
+
+<!-- doing things is by doing a tukey test just testing the effect of -->
+
+<!-- Substrate. This code is immediately below (1). -->
+
+<!-- However, this makes it impossible to put letters over the results if we -->
+
+<!-- plot them by species. To compromise, we can actually use the full model -->
+
+<!-- and then do planned tukey tests. (2) -->
+
+<!-- (1) take out interaction term and test for overall tukey differences -->
+
+<!--     among Substrates -->
+
+<!-- ```{r} -->
+
+<!-- finmodg1ag2 <- lme( -->
+
+<!--   AGDrymass_g ~ Genus + Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 |Genus),  -->
+
+<!--     varIdent(form = ~ 1 |Sub)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1AGmass -->
+
+<!-- ) -->
+
+<!-- summary(glht(finmodg1ag2, linfct = mcp(Sub = "Tukey"))) -->
+
+<!-- ``` -->
+
+<!-- All Substrates differ aside from dredge and mix. (a, b, c, c) [If I run -->
+
+<!-- it with the interaction, then C=F \< M=D] -->
+
+<!-- (2) To run the Tukey test by species and Substrate, I need to first -->
+
+<!--     create a complex category that captures both. -->
+
+<!-- ```{r} -->
+
+<!-- g1AGmass$GenusSub <- factor(paste(g1AGmass$Genus, g1AGmass$Sub, sep = "_")) -->
+
+<!-- finmodg1ag3 <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_g ~ GenusSub, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 |Genus),  -->
+
+<!--     varIdent(form = ~ 1 |Sub)), -->
+
+<!--     method = "REML", -->
+
+<!--     data = g1AGmass -->
+
+<!--   ) -->
+
+<!-- AIC(finmodg1ag, finmodg1ag3) -->
+
+<!-- plot(fitted(finmodg1ag), fitted(finmodg1ag3)) -->
+
+<!-- ``` -->
+
+<!-- As apparent above, the two models are equivalent. -->
+
+<!-- ```{r} -->
+
+<!-- summary(glht(finmodg1ag3, linfct = mcp( -->
+
+<!--   GenusSub = c( -->
+
+<!--     "Sporobolus_C-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_M-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_M-Sporobolus_C=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_C=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_M=0", -->
+
+<!--     "Zizaniopsis_C-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_M-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_M-Zizaniopsis_C=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_C=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_M=0", -->
+
+<!--     "Salix_C-Salix_F=0", -->
+
+<!--     "Salix_M-Salix_F=0", -->
+
+<!--     "Salix_D-Salix_F=0", -->
+
+<!--     "Salix_M-Salix_C=0", -->
+
+<!--     "Salix_D-Salix_C=0", -->
+
+<!--     "Salix_D-Salix_M=0" -->
+
+<!--   ) -->
+
+<!-- ))) -->
+
+<!-- ``` -->
+
+<!-- Sporobolus a, ab, bc, c; Zizaniopsis a, a, b, b; Salix a, ab, b, b -->
+
+<!-- #### AG Collective Summary -->
+
+<!-- ```{r} -->
+
+<!-- anova(finmodg1ag, type = "marginal") -->
+
+<!-- G1AGSummary = "best ag dry biomass model shows just a genus and a Sub effect (F[2,87]=38.5959, p<0.0001; F[3,87]=20.1751, p<0.0001). Interaction term is not significant (F[6,87]=2.1550, p=0.0551) but the best model (lowest AIC)includes it. g1AGM1GenSub. Sporobolus a, ab, bc, c; Zizaniopsis a, a, b, b; Salix a, ab, b, b" -->
+
+<!-- G1AGSummary -->
+
+<!-- ``` -->
+
+<!-- ### BG Collective Drymass -->
+
+<!-- #### Model Selection -->
+
+<!-- Always start with all fixed effects (including interaction). -->
+
+<!-- ```{r} -->
+
+<!-- g1BGM1 <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- )  -->
+
+<!-- anova(g1BGM1) -->
+
+<!-- ``` -->
+
+<!-- There is an interaction. -->
+
+<!-- Is block a large effect? -->
+
+<!-- ```{r} -->
+
+<!-- g1BGM2 <- gls( -->
+
+<!--   BGDrymass_g ~ Genus * Sub,  -->
+
+<!--   method = "REML",  -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) -->
+
+<!-- anova(g1BGM1, g1BGM2)  -->
+
+<!-- ``` -->
+
+<!-- It is virtually nonexistent, but we keep it as a practice. -->
+
+<!-- #### Fit heterogeneous variances -->
+
+<!-- ```{r} -->
+
+<!-- g1BGM1 <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) -->
+
+<!-- g1BGM1Gen <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Genus), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #Genus -->
+
+<!-- g1BGM1Sub <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Sub), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #Sub -->
+
+<!-- g1BGM1GenSub <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 | -->
+
+<!--                                Genus),  -->
+
+<!--                     varIdent(form = ~ 1 | Sub)), -->
+
+<!--   method = -->
+
+<!--     "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #GenusSub -->
+
+<!-- g1BGM1Block <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Block), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #Block -->
+
+<!-- g1BGM1GenBlock <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 |Genus),  -->
+
+<!--                     varIdent(form = ~ 1 |Block)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #GenBlock -->
+
+<!-- g1BGM1SubBlock <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 |Sub),  -->
+
+<!--                     varIdent(form = ~ 1 |Block)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #SubBlock -->
+
+<!-- g1BGM1GenSubBlock <- lme( -->
+
+<!--   BGDrymass_g ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Genus), -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Sub), -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Block) -->
+
+<!--   ), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g1BGmass -->
+
+<!-- ) #GenSubBlock -->
+
+<!-- anova( -->
+
+<!--   g1BGM1, -->
+
+<!--   g1BGM1Gen, -->
+
+<!--   g1BGM1Sub, -->
+
+<!--   g1BGM1GenSub, -->
+
+<!--   g1BGM1Block, -->
+
+<!--   g1BGM1GenBlock, -->
+
+<!--   g1BGM1SubBlock, -->
+
+<!--   g1BGM1GenSubBlock -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- sort the AICs for easier visualization of best -->
+
+<!-- ```{r} -->
+
+<!-- myg1bgaics <- -->
+
+<!--   AIC( -->
+
+<!--     g1BGM1, -->
+
+<!--     g1BGM1Gen, -->
+
+<!--     g1BGM1Sub, -->
+
+<!--     g1BGM1GenSub, -->
+
+<!--     g1BGM1Block, -->
+
+<!--     g1BGM1GenBlock, -->
+
+<!--     g1BGM1SubBlock, -->
+
+<!--     g1BGM1GenSubBlock -->
+
+<!--   ) -->
+
+<!-- myg1bgaics[order(myg1bgaics$AIC), ] -->
+
+<!-- ``` -->
+
+<!-- So best one is heterogeneous variances by Sub and genus -->
+
+<!-- ```{r} -->
+
+<!-- anova(g1BGM1GenSub, type = "marginal")  -->
+
+<!-- summary(g1BGM1GenSub) -->
+
+<!-- finmodg1bg <- g1BGM1GenSub -->
+
+<!-- ``` -->
+
+<!-- #### Validation -->
+
+<!-- ```{r} -->
+
+<!-- hist(resid(finmodg1bg, type = "normalized")) -->
+
+<!-- plot(fitted(finmodg1bg), resid(finmodg1bg, type = "normalized")) -->
+
+<!-- abline(h = 0, lty = 2) -->
+
+<!-- lines(smooth.spline(fitted(finmodg1bg), residuals(finmodg1bg))) -->
+
+<!-- ``` -->
+
+<!-- Looks good. -->
+
+<!-- #### Plot Means and Standard Error -->
+
+<!-- ```{r} -->
+
+<!-- my_colors <- c("gold", "goldenrod2", "chartreuse3", "skyblue3") -->
+
+<!-- my_shapes <- c(18, 15, 17, 16) -->
+
+<!-- plotg1BG <- ggplot(g1BGmass, aes(Sub, BGDrymass_g)) + -->
+
+<!--   scale_color_manual(values = my_colors) + -->
+
+<!--   scale_shape_manual(values = my_shapes) + -->
+
+<!--   geom_point( -->
+
+<!--     aes(shape = Substrate, color = Substrate), -->
+
+<!--     alpha = 0.75, -->
+
+<!--     position = position_jitter(height = 0, width = 0.2), -->
+
+<!--     size = 1.5, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.data = mean_se, -->
+
+<!--     geom = "errorbar", -->
+
+<!--     width = 0.2, -->
+
+<!--     colour = "black", -->
+
+<!--     alpha = 1 -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun = mean, -->
+
+<!--     geom = "point", -->
+
+<!--     fill = "black", -->
+
+<!--     pch = 21, -->
+
+<!--     size = 2.5 -->
+
+<!--   ) + -->
+
+<!--   theme_bw() -->
+
+<!-- plotg1BGlab <- plotg1BG + -->
+
+<!--   labs(x = "Substrate", y = "BG Biomass (g)") -->
+
+<!-- plotg1BGlabfacet <- plotg1BGlab + -->
+
+<!--   facet_wrap( ~ Genus) -->
+
+<!-- plotg1BGlabfacet -->
+
+<!-- ``` -->
+
+<!-- #### BG Drymass Tukey tests -->
+
+<!-- There is an interaction, so we need to do Tukey by species. To do Tukey -->
+
+<!-- by spp and substrate, we will create a new category that joins both. -->
+
+<!-- ```{r} -->
+
+<!-- g1BGmass$GenusSub <- factor(paste(g1BGmass$Genus, g1BGmass$Sub, sep = "_")) -->
+
+<!-- finmodg1bg3 <- -->
+
+<!--   lme( -->
+
+<!--     BGDrymass_g ~ GenusSub, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varComb(varIdent(form = ~ 1 | -->
+
+<!--                                  Genus),  -->
+
+<!--                       varIdent(form = ~ 1 | Sub)), -->
+
+<!--     method = -->
+
+<!--       "REML", -->
+
+<!--     data = g1BGmass -->
+
+<!--   ) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- summary(glht(finmodg1bg3, linfct = mcp( -->
+
+<!--   GenusSub = c( -->
+
+<!--     "Sporobolus_C-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_M-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_M-Sporobolus_C=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_C=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_M=0", -->
+
+<!--     "Zizaniopsis_C-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_M-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_M-Zizaniopsis_C=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_C=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_M=0", -->
+
+<!--     "Salix_C-Salix_F=0", -->
+
+<!--     "Salix_M-Salix_F=0", -->
+
+<!--     "Salix_D-Salix_F=0", -->
+
+<!--     "Salix_M-Salix_C=0", -->
+
+<!--     "Salix_D-Salix_C=0", -->
+
+<!--     "Salix_D-Salix_M=0" -->
+
+<!--   ) -->
+
+<!-- ))) -->
+
+<!-- ``` -->
+
+<!-- Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, ab; Salix: a, ab, ab, b -->
+
+<!-- #### BG Collective Summary -->
+
+<!-- ```{r} -->
+
+<!-- anova(finmodg1bg) -->
+
+<!-- G1BGSummary <- "For belowground biomass, there are main effects of genus and Sub (F[2,87]=35.9749, p<0.0001; F[3,87]=22.5412, p<0.0001), and interaction between the two (F[6,87]=3.8875, p=0.0017). Heterogeneous variance of genus and Substrate are important. g1BGM1GenSub. Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, ab; Salix: a, ab, ab, b" -->
+
+<!-- ``` -->
+
+<!-- ### Total Collective Drymass -->
+
+<!-- #### Model Selection -->
+
+<!-- Begin with all fixed effects. -->
+
+<!-- ```{r} -->
+
+<!-- g1TotM1 <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) -->
+
+<!-- anova(g1TotM1) -->
+
+<!-- g1TotM1b <- lme( -->
+
+<!--   Totmass ~ Genus + Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) -->
+
+<!-- anova(g1TotM1b) -->
+
+<!-- anova(g1TotM1,g1TotM1b) -->
+
+<!-- ``` -->
+
+<!-- No apparent interaction, but the AIC is lower by including it. -->
+
+<!-- Is the random block effect large? -->
+
+<!-- ```{r} -->
+
+<!-- g1TotM2 <- gls(Totmass ~ Genus * Sub, method = "REML", data = totg1growth) -->
+
+<!-- anova(g1TotM1, g1TotM2)  -->
+
+<!-- ``` -->
+
+<!-- It is not large. -->
+
+<!-- #### Fit heterogeneous variances -->
+
+<!-- ```{r} -->
+
+<!-- g1TotM1 <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) -->
+
+<!-- g1TotM1Gen <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Genus), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #Genus -->
+
+<!-- g1TotM1Sub <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Sub), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #Sub -->
+
+<!-- g1TotM1GenSub <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 | -->
+
+<!--                                Genus), varIdent(form = ~ 1 | -->
+
+<!--                                                   Sub)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #GenusSub -->
+
+<!-- g1TotM1Block <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 | -->
+
+<!--                        Block), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #Block -->
+
+<!-- g1TotM1GenBlock <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 | -->
+
+<!--                                Genus), varIdent(form = ~ 1 | -->
+
+<!--                                                   Block)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #GenBlock -->
+
+<!-- g1TotM1SubBlock <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 | -->
+
+<!--                                Sub), varIdent(form = ~ 1 | -->
+
+<!--                                                 Block)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #SubBlock -->
+
+<!-- g1TotM1GenSubBlock <- lme( -->
+
+<!--   Totmass ~ Genus * Sub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb( -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Genus), -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Sub), -->
+
+<!--     varIdent(form = ~ 1 | -->
+
+<!--                Block) -->
+
+<!--   ), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) #GenSubBlock -->
+
+<!-- anova(g1TotM1, g1TotM1Gen) -->
+
+<!-- anova(g1TotM1, g1TotM1Sub) -->
+
+<!-- anova(g1TotM1, g1TotM1GenSub) -->
+
+<!-- anova(g1TotM1, g1TotM1Block) -->
+
+<!-- anova(g1TotM1, g1TotM1SubBlock) -->
+
+<!-- anova(g1TotM1, g1TotM1GenBlock) -->
+
+<!-- anova(g1TotM1, g1TotM1GenSubBlock) -->
+
+<!-- ``` -->
+
+<!-- sort the AICs for easier visualization of best -->
+
+<!-- ```{r} -->
+
+<!-- myg1totaics <- AIC( -->
+
+<!--   g1TotM1, -->
+
+<!--   g1TotM1Gen, -->
+
+<!--   g1TotM1Sub, -->
+
+<!--   g1TotM1GenSub, -->
+
+<!--   g1TotM1Block, -->
+
+<!--   g1TotM1SubBlock, -->
+
+<!--   g1TotM1GenBlock, -->
+
+<!--   g1TotM1GenSubBlock -->
+
+<!-- ) -->
+
+<!-- myg1totaics[order(myg1totaics$AIC), ] -->
+
+<!-- ``` -->
+
+<!-- So best one is het variances by Sub and genus -->
+
+<!-- ```{r} -->
+
+<!-- summary(g1TotM1GenSub) -->
+
+<!-- anova(g1TotM1GenSub) -->
+
+<!-- finmodg1tot <- g1TotM1GenSub -->
+
+<!-- ``` -->
+
+<!-- When we account for the heterogeneous variances, we do see an -->
+
+<!-- interaction. -->
+
+<!-- #### Validation -->
+
+<!-- ```{r} -->
+
+<!-- hist(resid(finmodg1tot, type = "normalized")) -->
+
+<!-- plot(fitted(finmodg1tot), resid(finmodg1tot, type = "normalized")) -->
+
+<!-- abline(h = 0, lty = 2) -->
+
+<!-- lines(smooth.spline(fitted(finmodg1tot), residuals(finmodg1tot))) -->
+
+<!-- ``` -->
+
+<!-- These look alright. -->
+
+<!-- #### Plot Means and Standard Errors -->
+
+<!-- ```{r} -->
+
+<!-- my_colors <- c("gold", "goldenrod2", "chartreuse3", "skyblue3") -->
+
+<!-- my_shapes <- c(18, 15, 17, 16) -->
+
+<!-- plotg1tot <- ggplot(totg1growth, aes(Sub, Totmass)) + -->
+
+<!--   scale_color_manual(values = my_colors) + -->
+
+<!--   scale_shape_manual(values = my_shapes) + -->
+
+<!--   geom_point( -->
+
+<!--     aes(color = Substrate, shape = Substrate), -->
+
+<!--     alpha = 0.75, -->
+
+<!--     position = position_jitter(height = 0, width = 0.2), -->
+
+<!--     size = 1.5, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.data = mean_se, -->
+
+<!--     geom = "errorbar", -->
+
+<!--     width = 0.2, -->
+
+<!--     colour = "black", -->
+
+<!--     alpha = 1 -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.y = mean, -->
+
+<!--     geom = "point", -->
+
+<!--     fill = "black", -->
+
+<!--     pch = 21, -->
+
+<!--     size = 2.5 -->
+
+<!--   ) + -->
+
+<!--   theme_bw() -->
+
+<!-- plotg1totlab <- plotg1tot + -->
+
+<!--   labs(x = "Substrate", y = "Total Biomass (g)") -->
+
+<!-- plotg1totlabfacet <- plotg1totlab + -->
+
+<!--   facet_wrap( ~ Genus) -->
+
+<!-- plotg1totlabfacet -->
+
+<!-- ``` -->
+
+<!-- #### Total Drymass Tukey tests -->
+
+<!-- In our model, the interaction term is significant, indicating that we -->
+
+<!-- should perform the Tukey tests separately by species. As above, we will -->
+
+<!-- create a complex category. -->
+
+<!-- ```{r} -->
+
+<!-- totg1growth$GenusSub <- factor(paste(totg1growth$Genus, totg1growth$Sub, sep = "_")) -->
+
+<!-- finmodg1tot2 <- lme( -->
+
+<!--   Totmass ~ GenusSub, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varComb(varIdent(form = ~ 1 |Genus),  -->
+
+<!--                     varIdent(form = ~ 1 |Sub)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = totg1growth -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- summary(glht(finmodg1tot2, linfct = mcp( -->
+
+<!--   GenusSub = c( -->
+
+<!--     "Sporobolus_C-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_M-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_F=0", -->
+
+<!--     "Sporobolus_M-Sporobolus_C=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_C=0", -->
+
+<!--     "Sporobolus_D-Sporobolus_M=0", -->
+
+<!--     "Zizaniopsis_C-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_M-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_F=0", -->
+
+<!--     "Zizaniopsis_M-Zizaniopsis_C=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_C=0", -->
+
+<!--     "Zizaniopsis_D-Zizaniopsis_M=0", -->
+
+<!--     "Salix_C-Salix_F=0", -->
+
+<!--     "Salix_M-Salix_F=0", -->
+
+<!--     "Salix_D-Salix_F=0", -->
+
+<!--     "Salix_M-Salix_C=0", -->
+
+<!--     "Salix_D-Salix_C=0", -->
+
+<!--     "Salix_D-Salix_M=0" -->
+
+<!--   ) -->
+
+<!-- ))) -->
+
+<!-- ``` -->
+
+<!-- Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, b; Salix: a, b, b, b -->
+
+<!-- #### Total Collective Summary -->
+
+<!-- ```{r} -->
+
+<!-- anova(g1TotM1GenSub) -->
+
+<!-- G1TotSummary <- "For combined biomass, there is an interactive effect of genus and Substrate F[6,87]=2.6158, p = 0.0184), as well as the main effects of each (F[2,87]= 41.7686, p<0.0001; F[3,87]=26.29472, p<0.0001).g1TotM1GenSub. Sporobolus: a, a, b, b; Zizaniopsis: a, a, b, b; Salix: a, b, b, b" -->
+
+<!-- ``` -->
+
+<!-- ### Final Collective Results -->
+
+<!-- #### AG -->
+
+<!-- ```{r} -->
+
+<!-- anova(finmodg1ag, type = "marginal") -->
+
+<!-- G1AGSummary -->
+
+<!-- plotg1ag -->
+
+<!-- plotg1aglab -->
+
+<!-- plotg1aglabfacet -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg1aglabfacetcolor.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 7, -->
+
+<!--   height = 3, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- summary(glht(finmodg1ag, linfct = mcp(Sub = "Tukey"))) -->
+
+<!-- ``` -->
+
+<!-- #### BG -->
+
+<!-- ```{r} -->
+
+<!-- anova(finmodg1bg, type = "marginal") -->
+
+<!-- G1BGSummary -->
+
+<!-- plotg1BG -->
+
+<!-- plotg1BGlab -->
+
+<!-- plotg1BGlabfacet -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg1bglabfacetcolor.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 7, -->
+
+<!--   height = 3, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- summary(glht(finmodg1bg, linfct = mcp(Sub = "Tukey"))) -->
+
+<!-- ``` -->
+
+<!-- #### Total -->
+
+<!-- ```{r} -->
+
+<!-- anova(finmodg1tot, type = "marginal") -->
+
+<!-- G1TotSummary -->
+
+<!-- plotg1totlab -->
+
+<!-- plotg1totlabfacet -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg1totlabfacetcolor.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 7, -->
+
+<!--   height = 3, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- summary(glht(finmodg1tot, linfct = mcp(Sub = "Tukey"))) -->
+
+<!-- ``` -->
+
+<!-- \newpage -->
+
+<!-- ## Experiment 2 -->
+
+<!-- ### Data Description -->
+
+<!-- ### Data Prep -->
+
+<!-- #### Assign Data to a Variable -->
+
+<!-- ```{r} -->
+
+<!-- g2growth <- read.csv("Biomass_Experiment2.csv", stringsAsFactors = T) -->
+
+<!-- #use strings as factors = T, it makes them factors not characters  -->
+
+<!-- ``` -->
+
+<!-- #### Straighten up the data -->
+
+<!-- Filter out dead species -->
+
+<!-- ```{r} -->
+
+<!-- g2growth <- g2growth %>% -->
+
+<!--   filter(Survival != "Dead") -->
+
+<!-- ``` -->
+
+<!-- Use structure function to view how each variable (column) is -->
+
+<!-- categorized. -->
+
+<!-- ```{r, echo=FALSE} -->
+
+<!-- str(g2growth) -->
+
+<!-- ``` -->
+
+<!-- Some of my columns were the wrong data type. The following code -->
+
+<!-- reassigns data types and orders factors. -->
+
+<!-- ```{r} -->
+
+<!-- g2growth$Block <- factor(g2growth$Block, -->
+
+<!--                          levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")) -->
+
+<!-- g2growth$Substrate <- -->
+
+<!--   factor(g2growth$Substrate, levels = c("G", "M", "D")) -->
+
+<!-- #The levels portion here specifies the order I want for this variable. -->
+
+<!-- ``` -->
+
+<!-- Separate by species for down the line. -->
+
+<!-- ```{r} -->
+
+<!-- bcgrowth <- g2growth %>% -->
+
+<!--   filter(Species == "BC") -->
+
+<!-- gbgrowth <- g2growth %>% -->
+
+<!--   filter(Species == "GB") -->
+
+<!-- ``` -->
+
+<!-- #### Replicates -->
+
+<!-- ```{r} -->
+
+<!-- bcgrowth %>% -->
+
+<!--   count(Substrate) -->
+
+<!-- gbgrowth %>% -->
+
+<!--   count(Substrate) -->
+
+<!-- ``` -->
+
+<!-- Three of my GB had died: two in Glass and one in Mix. -->
+
+<!-- ```{r} -->
+
+<!-- #Totals -->
+
+<!-- g2Totmass <- g2growth %>% -->
+
+<!--   filter(!is.na(TotDrymass_Estimated_g)) -->
+
+<!-- totGB <- g2Totmass %>% -->
+
+<!--   filter(Species == "GB") -->
+
+<!-- totBC <- g2Totmass %>% -->
+
+<!--   filter(Species == "BC") -->
+
+<!-- #Aboveground -->
+
+<!-- g2AGmass <- g2growth %>% -->
+
+<!--   filter(!is.na(AGDrymass_Clean_g)) -->
+
+<!-- AGGB <- g2AGmass %>% -->
+
+<!--   filter(Species == "GB") -->
+
+<!-- AGBC <- g2AGmass %>% -->
+
+<!--   filter(Species == "BC") -->
+
+<!-- #Belowground -->
+
+<!-- g2BGmass <- g2growth %>% -->
+
+<!--   filter(!is.na(BGFullDrymass_Estimated_g)) -->
+
+<!-- BGGB <- g2BGmass %>% -->
+
+<!--   filter(Species == "GB") -->
+
+<!-- BGBC <- g2BGmass %>% -->
+
+<!--   filter(Species == "BC") -->
+
+<!-- ``` -->
+
+<!-- #### Looking for initial biases -->
+
+<!-- ##### Baldcypress -->
+
+<!-- First I will confirm that the initial plant heights were comparable -->
+
+<!-- across assigned treatments. -->
+
+<!-- ```{r} -->
+
+<!-- boxplot( -->
+
+<!--   bcgrowth$Height_cm_Initial ~ bcgrowth$Substrate, -->
+
+<!--   ylab = "Initial Height in cm", -->
+
+<!--   xlab = "Substrate", -->
+
+<!--   main = "Baldcypress Initial Height" -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- No clear differences in initial height of BCs planted in each substrate. -->
+
+<!-- I will now look at the initial diameters. -->
+
+<!-- ```{r} -->
+
+<!-- boxplot( -->
+
+<!--   bcgrowth$Diameter_mm_September ~ bcgrowth$Substrate, -->
+
+<!--   ylab = "Diameter at 9cm (mm)", -->
+
+<!--   xlab = "Substrate", -->
+
+<!--   main = "Baldcypress Diameter by Substrate: September" -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- Diameters are also comparable across treatments, with the lowest -->
+
+<!-- variance in the mix. -->
+
+<!-- ##### Giant Bulrush -->
+
+<!-- I'll look for differences in the initial height of plants based on -->
+
+<!-- substrate they were assigned to. -->
+
+<!-- ```{r} -->
+
+<!-- boxplot( -->
+
+<!--   gbgrowth$Height_cm_Initial ~ gbgrowth$Substrate, -->
+
+<!--   ylab = "Initial Height in cm", -->
+
+<!--   xlab = "Substrate", -->
+
+<!--   main = "Giant Bullrush Initial Height" -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- No clear difference in GB initial height across substrates. There are -->
+
+<!-- two outlying tall individuals in the dredge. -->
+
+<!-- ### AG Collective Drymass -->
+
+<!-- #### Model Selection -->
+
+<!-- We'll start with the full model, and test whether there is an -->
+
+<!-- interaction. -->
+
+<!-- ```{r} -->
+
+<!-- #Interaction -->
+
+<!-- g2AGM1 <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) -->
+
+<!-- anova(g2AGM1) -->
+
+<!-- #No interaction -->
+
+<!-- g2AGM1b <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Species + Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) -->
+
+<!-- anova(g2AGM1b) -->
+
+<!-- ``` -->
+
+<!-- There is no interaction between species and substrate. We will run our -->
+
+<!-- Tukey contrasts on the species individually. -->
+
+<!-- Just to check for curiosity's sake whether the random block effect is -->
+
+<!-- large: -->
+
+<!-- ```{r} -->
+
+<!-- g2AGM2 <- -->
+
+<!--   gls(AGDrymass_Clean_g ~ Species * Substrate, method = "REML", data = g2AGmass) -->
+
+<!-- anova(g2AGM1, g2AGM2) -->
+
+<!-- ``` -->
+
+<!-- It is not large, but we can still keep it. -->
+
+<!-- ##### Fit heterogeneous variances -->
+
+<!-- ```{r} -->
+
+<!-- g2AGM1 <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) -->
+
+<!-- g2AGM1Spp <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varIdent(form = ~ 1 | -->
+
+<!--                          Species), -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) #Species -->
+
+<!-- g2AGM1Sub <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varIdent(form = ~ 1 | -->
+
+<!--                          Substrate), -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) #Substrate -->
+
+<!-- g2AGM1SppSub <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varComb( -->
+
+<!--       varIdent(form = ~ 1 | -->
+
+<!--                          Species), -->
+
+<!--       varIdent(form = ~ 1 | -->
+
+<!--                          Substrate) -->
+
+<!--       ), -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) #SpeciesSubstrate -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- anova(g2AGM1, g2AGM1Spp, g2AGM1Sub, g2AGM1SppSub) -->
+
+<!-- ``` -->
+
+<!-- sort the AICs for easier visualization of best -->
+
+<!-- ```{r} -->
+
+<!-- myg2AGaics <- -->
+
+<!--   AIC(g2AGM1, g2AGM1Spp, g2AGM1Sub, g2AGM1SppSub) -->
+
+<!-- myg2AGaics[order(myg2AGaics$AIC),] -->
+
+<!-- ``` -->
+
+<!-- So best model has heterogeneous variances by Substrate -->
+
+<!-- ##### Chosen Model -->
+
+<!-- ```{r} -->
+
+<!-- anova(g2AGM1Sub, type = "marginal") -->
+
+<!-- summary(g2AGM1Sub) -->
+
+<!-- finmodg2AG <- g2AGM1Sub -->
+
+<!-- ``` -->
+
+<!-- ##### Validation -->
+
+<!-- ```{r} -->
+
+<!-- hist(resid(finmodg2AG, type = "normalized")) -->
+
+<!-- plot(fitted(finmodg2AG), -->
+
+<!--      resid(finmodg2AG, type = "normalized")) -->
+
+<!-- abline(h = 0, lty = 2) -->
+
+<!-- lines(smooth.spline(fitted(finmodg2AG), residuals(finmodg2AG))) -->
+
+<!-- ``` -->
+
+<!-- These look pretty good. -->
+
+<!-- #### Plot Means and Standard Errors -->
+
+<!-- ```{r} -->
+
+<!-- my_colors <- c("goldenrod2","chartreuse3","skyblue3") -->
+
+<!-- my_shapes <- c(15, 17, 16) -->
+
+<!-- plotg2ag <- ggplot(g2growth, aes(Substrate, AGDrymass_Clean_g)) + -->
+
+<!--   scale_color_manual(values = my_colors) + -->
+
+<!--   scale_shape_manual(values = my_shapes) + -->
+
+<!--   geom_point(aes(color = Substrate, shape = Substrate), -->
+
+<!--     alpha = .75, -->
+
+<!--     fill = "NA", -->
+
+<!--     position = position_jitter(height = 0, width = 0.2), -->
+
+<!--     size = 1.5, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.data = mean_se, -->
+
+<!--     geom = "errorbar", -->
+
+<!--     width = 0.2, -->
+
+<!--     colour = "black", -->
+
+<!--     alpha = 1, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.y = mean, -->
+
+<!--     geom = "point", -->
+
+<!--     fill = "black", -->
+
+<!--     pch = 21, -->
+
+<!--     size = 2, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   theme_bw() -->
+
+<!-- plotg2aglab <- plotg2ag + -->
+
+<!--   labs(x = "Substrate", y = "AG Biomass (g)") -->
+
+<!-- plotg2aglabfacet <- plotg2aglab  -->
+
+<!-- plotg2aglabfacet <- plotg2aglab + -->
+
+<!--   facet_wrap(~Species) -->
+
+<!-- plotg2aglabfacet -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg2aglabfacetcolorwide.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 6, -->
+
+<!--   height = 2.5, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- #### AG drymass Tukey tests -->
+
+<!-- In our model, the interaction term is significant, so we must do Tukey -->
+
+<!-- tests separately by species. we'll achieve this by creating a complex -->
+
+<!-- category of species and substrate. -->
+
+<!-- ```{r} -->
+
+<!-- g2AGmass$Spp_Sub <- -->
+
+<!--   factor(paste(g2AGmass$Species, g2AGmass$Substrate, sep = "_")) -->
+
+<!-- g2AGmass$Spp_Sub <- -->
+
+<!--   factor(g2AGmass$Spp_Sub, -->
+
+<!--          levels = c("GB_G", "GB_M", "GB_D", "BC_G", "BC_M", "BC_D")) -->
+
+<!-- finmodg2AG2 <- -->
+
+<!--   lme( -->
+
+<!--     AGDrymass_Clean_g ~ Spp_Sub, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varComb( -->
+
+<!--       varIdent(form = ~ 1 | Substrate)), -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2AGmass -->
+
+<!--   ) -->
+
+<!-- anova(finmodg2AG, finmodg2AG2) -->
+
+<!-- plot(fitted(finmodg2AG), fitted(finmodg2AG2)) -->
+
+<!-- ``` -->
+
+<!-- Residuals line up. These models are essentially the same. -->
+
+<!-- ```{r} -->
+
+<!-- summary((glht(finmodg2AG2, linfct = mcp( -->
+
+<!--   Spp_Sub = c( -->
+
+<!--     "GB_M-GB_G= 0", -->
+
+<!--     "GB_D-GB_G=0", -->
+
+<!--     "GB_D-GB_M=0", -->
+
+<!--     "BC_M-BC_G= 0", -->
+
+<!--     "BC_D-BC_G=0", -->
+
+<!--     "BC_D-BC_M=0" -->
+
+<!--   ) -->
+
+<!-- )))) -->
+
+<!-- ``` -->
+
+<!-- GB: a, b, b; BC: a, a, a -->
+
+<!-- #### Summary -->
+
+<!-- ```{r} -->
+
+<!-- finmodg2AG <- g2AGM1Sub -->
+
+<!-- anova(finmodg2AG, type = "marginal") -->
+
+<!-- summary(finmodg2AG) -->
+
+<!-- g2AGSummary <- "best AG dry biomass model includes a main effect of substrate (F[2,42]=    6.3953, p=0.0038) and an interaction between species and substrate (F[2,42]=    5.0827, p=0.0105), and accounts for heterogeneous variance of substrate. g2AGM1Sub. GB: a, b, b; BC: a, a, a" -->
+
+<!-- ``` -->
+
+<!-- ### BG Drymass -->
+
+<!-- #### Model Selection -->
+
+<!-- start with including block, just because we know that greenhouses vary -->
+
+<!-- in light reaching different parts. always start with all fixed effects -->
+
+<!-- (including interaction) -->
+
+<!-- ```{r} -->
+
+<!-- g2BGM1 <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) -->
+
+<!-- anova(g2BGM1) -->
+
+<!-- ``` -->
+
+<!-- No significant interaction found. -->
+
+<!-- ```{r} -->
+
+<!-- #just to check for curiosity sake whether the random block effect is large: -->
+
+<!-- g2BGM2 <- -->
+
+<!--   gls(BGFullDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--       method = "REML", -->
+
+<!--       data = g2BGmass) -->
+
+<!-- anova(g2BGM1, g2BGM2)  -->
+
+<!-- ``` -->
+
+<!-- It is not. -->
+
+<!-- Let's compare the model with and without the interaction term: -->
+
+<!-- ```{r} -->
+
+<!-- g2BGM3 <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species + Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) -->
+
+<!-- g2BGM4 <- gls( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species + Substrate, -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) -->
+
+<!-- anova(g2BGM3,g2BGM4) -->
+
+<!-- ``` -->
+
+<!-- In no case is block effect significant. We'll keep it in there. Also, -->
+
+<!-- the models that contain the interaction term have a lower AIC, so we'll -->
+
+<!-- proceed with those as well. -->
+
+<!-- ##### Check heterogeneous variances -->
+
+<!-- make graphs of variances to see what might need heterogeneous variances: -->
+
+<!-- ```          -->
+
+<!-- #block -->
+
+<!-- boxplot( -->
+
+<!--   g2BGmass$BGFullDrymass_Estimated_g ~ g2BGmass$Block, -->
+
+<!--   ylab = "BG dry -->
+
+<!-- biomass", -->
+
+<!-- xlab = "block" -->
+
+<!-- ) -->
+
+<!-- #treatment -->
+
+<!-- boxplot( -->
+
+<!--   g2BGmass$BGFullDrymass_Estimated_g ~ g2BGmass$Substrate, -->
+
+<!--   ylab = "BG dry biomass", -->
+
+<!--   xlab = "Substrate" -->
+
+<!-- ) -->
+
+<!-- #species -->
+
+<!-- boxplot( -->
+
+<!--   g2BGmass$BGFullDrymass_Estimated_g ~ g2BGmass$Species, -->
+
+<!--   ylab = "BG dry biomass", -->
+
+<!--   xlab = "Species" -->
+
+<!-- ) -->
+
+<!-- #all treatment combinations -->
+
+<!-- boxplot( -->
+
+<!--   g2BGmass$BGFullDrymass_Estimated_g ~ g2BGmass$Substrate * g2BGmass$Species, -->
+
+<!--   ylab = -->
+
+<!--     "BG dry biomass", -->
+
+<!--   xlab = "Species" -->
+
+<!-- )  -->
+
+<!-- ``` -->
+
+<!-- Variances don't seem too heterogeneous -->
+
+<!-- ##### Fit heterogeneous variances -->
+
+<!-- ```{r} -->
+
+<!-- g2BGM1 <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) -->
+
+<!-- g2BGM1Spp <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varIdent(form = ~ 1 | Species), -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) #Species -->
+
+<!-- g2BGM1Sub <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varIdent(form = ~ 1 | Substrate), -->
+
+<!--     method = "REML", -->
+
+<!--     data -->
+
+<!--     = g2BGmass -->
+
+<!--   ) #Substrate -->
+
+<!-- g2BGM1SppSub <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varComb( -->
+
+<!--       varIdent(form = ~ 1 | Species), -->
+
+<!--       varIdent(form = ~ 1 | Substrate)), -->
+
+<!--     method = -->
+
+<!--       "REML", -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) #SpeciesSubstrate -->
+
+<!-- #anova(g2BGM1, g2BGM1Spp) -->
+
+<!-- #anova(g2BGM1, g2BGM1Sub) -->
+
+<!-- #anova(g2BGM1, g2BGM1SppSub) -->
+
+<!-- ``` -->
+
+<!-- Sort the AICs for easier visualization of best. -->
+
+<!-- ```{r} -->
+
+<!-- myg2bgaics <- AIC(g2BGM1,g2BGM1Spp,g2BGM1Sub,g2BGM1SppSub) -->
+
+<!-- myg2bgaics[order(myg2bgaics$AIC),] -->
+
+<!-- ``` -->
+
+<!-- So best belowground biomass model accounts for het variances by species. -->
+
+<!-- ##### Chosen Model -->
+
+<!-- ```{r} -->
+
+<!-- anova(g2BGM1Spp, type = "marginal") -->
+
+<!-- summary(g2BGM1Spp) -->
+
+<!-- finmodg2bg <- g2BGM1Spp -->
+
+<!-- ``` -->
+
+<!-- According to this model, g2BGM1Spp, there is only a significant -->
+
+<!-- difference of species, not of substrate or interaction. -->
+
+<!-- ##### Validation -->
+
+<!-- ```{r} -->
+
+<!-- hist(resid(finmodg2bg, type = "normalized")) -->
+
+<!-- plot(fitted(finmodg2bg), resid(finmodg2bg, type = "normalized")) -->
+
+<!-- abline(h = 0, lty = 2) -->
+
+<!-- lines(smooth.spline(fitted(finmodg2bg), residuals(finmodg2bg))) -->
+
+<!-- ``` -->
+
+<!-- Data are skewed right. This is not a great model, but it's not glaringly -->
+
+<!-- abnormal. -->
+
+<!-- #### Plot Means and Standard Errors -->
+
+<!-- ```{r} -->
+
+<!-- plotg2bg <- ggplot(g2growth, aes(Substrate, BGDrymass_Clean_g)) + -->
+
+<!--   scale_color_manual(values = my_colors) + -->
+
+<!--   scale_shape_manual(values = my_shapes) + -->
+
+<!--   geom_point(aes(color = Substrate, shape = Substrate), -->
+
+<!--     alpha = .75, -->
+
+<!--     fill = "NA", -->
+
+<!--     position = position_jitter(height = 0, width = 0.2), -->
+
+<!--     size = 1.5, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.data = mean_se, -->
+
+<!--     geom = "errorbar", -->
+
+<!--     width = 0.2, -->
+
+<!--     colour = "black", -->
+
+<!--     alpha = 1, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.y = mean, -->
+
+<!--     geom = "point", -->
+
+<!--     fill = "black", -->
+
+<!--     pch = 21, -->
+
+<!--     size = 2, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   theme_bw() -->
+
+<!-- plotg2bglab <- plotg2bg + -->
+
+<!--   labs(x = "Substrate", y = "BG Biomass (g)") -->
+
+<!-- plotg2bglab -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg2bglabcolorwide.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 6, -->
+
+<!--   height = 2.5, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- plotg2bglabfacet <- plotg2bglab + -->
+
+<!--   facet_wrap(~Species) -->
+
+<!-- plotg2bglabfacet -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg2bglabfacetcolorwide.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 6, -->
+
+<!--   height = 2.5, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- #### BG Drymass Tukey Tests -->
+
+<!-- There is no interaction, so separating out by species is not necessary, -->
+
+<!-- but we can do this for consistency: -->
+
+<!-- ```{r} -->
+
+<!-- finmodg2bg2 <- lme( -->
+
+<!--   BGFullDrymass_Estimated_g ~ Species + Substrate, -->
+
+<!--   random = ~ 1 | -->
+
+<!--     Block, -->
+
+<!--   weights = varIdent(form = ~ 1 |Species), -->
+
+<!--   method = "REML", -->
+
+<!--   data = g2BGmass -->
+
+<!-- ) -->
+
+<!-- summary(glht(finmodg2bg2, linfct = mcp(Substrate = "Tukey"))) -->
+
+<!-- #No diffs between soil types if we take out interaction term. -->
+
+<!-- summary(glht(finmodg2bg, linfct = mcp(Substrate = "Tukey"))) -->
+
+<!-- #No diffs between soil types if we don't separate by species -->
+
+<!-- g2BGmass$Spp_Sub <- -->
+
+<!--   factor(paste(g2BGmass$Species, g2BGmass$Substrate, sep = "_")) -->
+
+<!-- g2BGmass$Spp_Sub <- -->
+
+<!--   factor(g2BGmass$Spp_Sub, -->
+
+<!--          levels = c("GB_G", "GB_M", "GB_D", "BC_G", "BC_M", "BC_D")) -->
+
+<!-- finmodg2bg3 <- -->
+
+<!--   lme( -->
+
+<!--     BGFullDrymass_Estimated_g ~ Spp_Sub, -->
+
+<!--     random = ~ 1 -->
+
+<!--     | Block, -->
+
+<!--     weights =  -->
+
+<!--       varIdent(form = ~ 1 | Species), -->
+
+<!--     method = -->
+
+<!--       "REML", -->
+
+<!--     data = g2BGmass -->
+
+<!--   ) -->
+
+<!-- anova(finmodg2bg,finmodg2bg3) -->
+
+<!-- plot(fitted(finmodg2bg), fitted(finmodg2bg3)) -->
+
+<!-- ``` -->
+
+<!-- These models are very alike. The residuals line up. I will use the model -->
+
+<!-- with the complex variable for my Tukey test. -->
+
+<!-- ```{r} -->
+
+<!-- summary((glht(finmodg2bg3, linfct = mcp( -->
+
+<!--   Spp_Sub = c( -->
+
+<!--     "GB_M-GB_G= 0", -->
+
+<!--     "GB_D-GB_G=0", -->
+
+<!--     "GB_D-GB_M=0", -->
+
+<!--     "BC_M-BC_G= 0", -->
+
+<!--     "BC_D-BC_G=0", -->
+
+<!--     "BC_D-BC_M=0" -->
+
+<!--   ) -->
+
+<!-- )))) -->
+
+<!-- ``` -->
+
+<!-- According to this, there are no differences between treatments. -->
+
+<!-- #### Summary -->
+
+<!-- ```{r} -->
+
+<!-- anova(finmodg2bg) -->
+
+<!-- g2BGSummary <- "main effects of species and Substrate, but no interaction. Heterogeneous variance by species. An effect of species (F[1, 42]=  4.59658, p = 0.0379). Model with interaction has lower AIC so was used anyhow. g2BGM1Spp: a, a, a. GB: a, a, a." -->
+
+<!-- ``` -->
+
+<!-- ### Total Drymass -->
+
+<!-- #### Model Selection -->
+
+<!-- start with including block, just because we know that greenhouses vary -->
+
+<!-- in light reaching different parts. always start with all fixed effects -->
+
+<!-- (including interaction) -->
+
+<!-- ```{r} -->
+
+<!-- g2TotM1 <- -->
+
+<!--   lme( -->
+
+<!--     TotDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2Totmass -->
+
+<!--   ) -->
+
+<!-- anova(g2TotM1) -->
+
+<!-- ``` -->
+
+<!-- NO interaction between species and substrate. -->
+
+<!-- just to check for curiosity sake whether the random block effect is -->
+
+<!-- large: -->
+
+<!-- ```{r} -->
+
+<!-- g2TotM2 <- -->
+
+<!--   gls(TotDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--       method = "REML", -->
+
+<!--       data = -->
+
+<!--         g2Totmass) -->
+
+<!-- anova(g2TotM1, g2TotM2) -->
+
+<!-- ``` -->
+
+<!-- There is not a significant effect of block. -->
+
+<!-- Looking at the models without the interaction term: -->
+
+<!-- ```{r} -->
+
+<!-- g2TotM3 <- -->
+
+<!--   lme( -->
+
+<!--     TotDrymass_Estimated_g ~ Species + Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     method = "REML", -->
+
+<!--     data = g2Totmass -->
+
+<!--   ) -->
+
+<!-- anova(g2TotM3) -->
+
+<!-- g2TotM4 <- -->
+
+<!--   gls(TotDrymass_Estimated_g ~ Species + Substrate, -->
+
+<!--       method = "REML", -->
+
+<!--       data = -->
+
+<!--         g2Totmass) -->
+
+<!-- anova(g2TotM3, g2TotM4) -->
+
+<!-- ``` -->
+
+<!-- These have a higher AIC. Let's keep the interaction term in there. -->
+
+<!-- ##### Check heterogeneous variances -->
+
+<!-- make graphs of variances to see what might need heterogeneous variances: -->
+
+<!-- ```          -->
+
+<!-- #Block -->
+
+<!-- boxplot( -->
+
+<!--   g2Totmass$TotDrymass_Estimated_g ~ g2Totmass$Block, -->
+
+<!--   ylab = "Dry biomass", -->
+
+<!--   xlab = "Block" -->
+
+<!-- ) -->
+
+<!-- #Substrate -->
+
+<!-- boxplot( -->
+
+<!--   g2Totmass$TotDrymass_Estimated_g ~ g2Totmass$Substrate, -->
+
+<!--   ylab = "Dry biomass", -->
+
+<!--   xlab = "Treatment" -->
+
+<!-- ) -->
+
+<!-- #species -->
+
+<!-- boxplot( -->
+
+<!--   g2Totmass$TotDrymass_Estimated_g ~ g2Totmass$Species, -->
+
+<!--   ylab = "Dry biomass", -->
+
+<!--   xlab = "Species" -->
+
+<!-- ) -->
+
+<!-- #all treatment combinations -->
+
+<!-- boxplot( -->
+
+<!--   g2Totmass$TotDrymass_Estimated_g ~ g2Totmass$Substrate * g2Totmass$Species, -->
+
+<!--   ylab = "Dry -->
+
+<!-- biomass", -->
+
+<!-- xlab = "Combination" -->
+
+<!-- )  -->
+
+<!-- ``` -->
+
+<!-- Combination of species and treatment could be heterogeneous. -->
+
+<!-- ##### Fit heterogeneous variances -->
+
+<!-- ```{r} -->
+
+<!-- g2TotM1 <- lme( -->
+
+<!--   TotDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   method = "REML", -->
+
+<!--   data = g2Totmass -->
+
+<!-- ) -->
+
+<!-- g2TotM1Spp <- -->
+
+<!--   lme( -->
+
+<!--     TotDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     weights = varIdent(form = ~ 1 | Species), -->
+
+<!--     method = "REML", -->
+
+<!--     data = -->
+
+<!--       g2Totmass -->
+
+<!--   ) #Species -->
+
+<!-- g2TotM1Sub <- -->
+
+<!--   lme( -->
+
+<!--     TotDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | Block, -->
+
+<!--     weights = varIdent(form = ~ 1 | Substrate), -->
+
+<!--     method = "REML", -->
+
+<!--     data = -->
+
+<!--       g2Totmass -->
+
+<!--   ) #Substrate -->
+
+<!-- g2TotM1SppSub <- -->
+
+<!--   lme( -->
+
+<!--     TotDrymass_Estimated_g ~ Species * Substrate, -->
+
+<!--     random = ~ 1 | -->
+
+<!--       Block, -->
+
+<!--     weights = varComb( -->
+
+<!--       varIdent(form = ~ 1 | Species), -->
+
+<!--       varIdent(form = ~ 1 | Substrate)), -->
+
+<!--     method = -->
+
+<!--       "REML", -->
+
+<!--     data = g2Totmass -->
+
+<!--   ) #SpeciesSubstrate -->
+
+<!-- anova(g2TotM1,g2TotM1Spp) -->
+
+<!-- anova(g2TotM1,g2TotM1Sub) -->
+
+<!-- anova(g2TotM1,g2TotM1SppSub) -->
+
+<!-- ``` -->
+
+<!-- sort the AICs for easier visualization of best -->
+
+<!-- ```{r} -->
+
+<!-- myg2totaics <- -->
+
+<!--   AIC(g2TotM1, g2TotM1Spp, g2TotM1Sub, g2TotM1SppSub) -->
+
+<!-- myg2totaics[order(myg2totaics$AIC),] -->
+
+<!-- ``` -->
+
+<!-- So best one is het variances by substrate and species. -->
+
+<!-- ```{r} -->
+
+<!-- anova(g2TotM1SppSub, type = "marginal") -->
+
+<!-- summary(g2TotM1SppSub) -->
+
+<!-- finmodg2tot <- g2TotM1SppSub -->
+
+<!-- ``` -->
+
+<!-- ##### Chosen Model -->
+
+<!-- ```{r} -->
+
+<!-- finmodg2tot <- g2TotM1SppSub -->
+
+<!-- ``` -->
+
+<!-- ##### Validation -->
+
+<!-- ```{r} -->
+
+<!-- hist(resid(g2TotM1SppSub, type = "normalized")) -->
+
+<!-- plot(fitted(g2TotM1SppSub), -->
+
+<!--      resid(g2TotM1SppSub, type = "normalized")) -->
+
+<!-- abline(h = 0, lty = 2) -->
+
+<!-- lines(smooth.spline(fitted(g2TotM1SppSub), residuals(g2TotM1SppSub))) -->
+
+<!-- ``` -->
+
+<!-- Skewed right a bit and not perfectly around zero, but not obviously -->
+
+<!-- bimodal or some other distribution than normal. -->
+
+<!-- #### Plot Means and Standard Errors -->
+
+<!-- ```{r} -->
+
+<!-- plotg2tot <- ggplot(g2growth, aes(Substrate, TotDrymass_Estimated_g)) + -->
+
+<!--   scale_color_manual(values = my_colors) + -->
+
+<!--   scale_shape_manual(values = my_shapes) + -->
+
+<!--   geom_point(aes(color = Substrate, shape = Substrate), -->
+
+<!--     alpha = .75, -->
+
+<!--     fill = "NA", -->
+
+<!--     position = position_jitter(height = 0, width = 0.2), -->
+
+<!--     size = 1.5, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.data = mean_se, -->
+
+<!--     geom = "errorbar", -->
+
+<!--     width = 0.2, -->
+
+<!--     colour = "black", -->
+
+<!--     alpha = 1, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   stat_summary( -->
+
+<!--     fun.y = mean, -->
+
+<!--     geom = "point", -->
+
+<!--     fill = "black", -->
+
+<!--     pch = 21, -->
+
+<!--     size = 2, -->
+
+<!--     show.legend = FALSE -->
+
+<!--   ) + -->
+
+<!--   theme_bw() -->
+
+<!-- plotg2totlab <- plotg2tot + -->
+
+<!--   labs(x = "Substrate", y = "Total Biomass (g)") -->
+
+<!-- plotg2totlabfacet <- plotg2totlab + -->
+
+<!--   facet_wrap(~Species) -->
+
+<!-- plotg2totlabfacet -->
+
+<!-- ggsave( -->
+
+<!--   filename = "./Figures/plotg2totlabfacetcolorwide.pdf", -->
+
+<!--   plot = last_plot(), -->
+
+<!--   device = NULL, -->
+
+<!--   path = NULL, -->
+
+<!--   scale = 1, -->
+
+<!--   width = 6, -->
+
+<!--   height = 2.5, -->
+
+<!--   units = c("in"), -->
+
+<!--   dpi = 600, -->
+
+<!--   limitsize = TRUE, -->
+
+<!--   bg = NULL, -->
+
+<!--   create.dir = FALSE -->
+
+<!-- ) -->
+
+<!-- ``` -->
+
+<!-- #### Total Drymass Tukey tests -->
+
+<!-- ```{r} -->
+
+<!-- #There is an interactive effect of species and substrate. We will need a complex variable to run the Tukey on both and plot by species. -->
+
+<!-- g2Totmass$Spp_Sub <- -->
+
+<!--   factor(paste(g2Totmass$Species, g2Totmass$Substrate, sep = "_")) -->
+
+<!-- g2Totmass$Spp_Sub <- -->
+
+<!--   factor(g2Totmass$Spp_Sub, -->
+
+<!--          levels = c("GB_G", "GB_M", "GB_D", "BC_G", "BC_M", "BC_D")) -->
+
+<!-- finmodg2tot2 <- lme( -->
+
+<!--   TotDrymass_Estimated_g ~ Spp_Sub, -->
+
+<!--   random = ~ 1 | Block, -->
+
+<!--   weights = -->
+
+<!--     varComb( -->
+
+<!--       varIdent(form = ~ 1 | Species), -->
+
+<!--       varIdent(form = ~ 1 | Substrate)), -->
+
+<!--   method = "REML", -->
+
+<!--   data = -->
+
+<!--     g2Totmass -->
+
+<!-- )  -->
+
+<!-- summary((glht(finmodg2tot2, linfct = mcp( -->
+
+<!--   Spp_Sub = c( -->
+
+<!--     "GB_M-GB_G=0", -->
+
+<!--     "GB_D-GB_G=0", -->
+
+<!--     "GB_D-GB_M=0", -->
+
+<!--     "BC_M-BC_G=0", -->
+
+<!--     "BC_D-BC_G=0", -->
+
+<!--     "BC_D-BC_M=0" -->
+
+<!--   ) -->
+
+<!-- )))) -->
+
+<!-- ``` -->
+
+<!-- GB: a, b, b; BC: a, a, a  -->
+
+<!-- #### Total Drymass Summary -->
+
+<!-- ```{r} -->
+
+<!-- anova(g2TotM1SppSub, type = "marginal") -->
+
+<!-- g2TotSummary <- "The chosen model for total biomass accounts for heterogeneous variance of species and substrate. There is an interactive effect of species and substrate (F[2,42]=3.43917, p=0.0414). g2TotM1SppSub.GB: a, b, b; BC: a, a, a." -->
+
+<!-- ``` -->
+
+<!-- ## Experiment 2 Final Results Summary -->
+
+<!-- ```{r} -->
+
+<!-- g2AGSummary -->
+
+<!-- g2BGSummary -->
+
+<!-- g2TotSummary -->
+
+<!-- ``` -->

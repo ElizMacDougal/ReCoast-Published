@@ -1,0 +1,798 @@
+---
+title: "MacDougal et al. 2025 Soil Physical Properties Analysis"
+author: "Elizabeth MacDougal"
+date: "2024-2025"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+geometry: margin=1in
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir='~/Tulane/1_VBL/2_ReCoast/Paper Growth/Analysis/Publish')
+knitr::opts_chunk$set(
+  dev = "png",
+  dpe = 300,
+  echo = FALSE,
+  cache = TRUE
+)
+options(contrasts=c("contr.helmert","contr.poly"));options("contrasts")
+```
+
+newpage
+
+# Description
+
+This file accompanies the paper "Wetland plant growth in recycled glass
+sand versus dredged river sand: Evaluating a new resource for coastal
+restoration." Paper authors: Elizabeth MacDougal, Bek Markel, Emily
+Farrer, Shehbaz Ahmad, Julie Albert, Sunshine Van Bael. Analyses in this
+file were conducted by Elizabeth MacDougal. Corresponding author:
+Elizabeth MacDougal,
+[emacdougal\@tulane.edu](mailto:emacdougal@tulane.edu){.email}
+
+Funding was provided by National Science Foundation Convergence
+Accelerator Program Award Number 2137730.
+
+SA conducted soil bulk density, porosity, permeability, and compaction
+tests, advised by JA.
+
+## Purpose of this File
+
+This file includes all soil physical properties analyses described in
+the paper. It serves to provide more detail to those who are curious,
+and to help others reproduce the results.
+
+# Environment Setup
+
+Load in the libraries I plan to use:
+
+```{r, warning=FALSE}
+library(dplyr)#DATA ORGANIZATION %>% symbol is used for "piping."
+library(nlme) #DATA ORGANIZATION. Tidyr is in here, and this lets me rearrange my data. 
+library(plotrix) #PLOTTING DATA. For means and standard error, to set error bars on plots. 
+library(tidyverse)#PLOTTING DATA. Useful for customizing plots
+library(ggpmisc)#PLOTTING DATA. Includes ggplot2 and ggpp.
+library(patchwork)#PLOTTING DATA. Plot multiple ggplots together in one figure
+library(ggpattern) #PLOTTING DATA. Used to add texture to graphs
+library(multcomp) #ANALYZING DATA. Used for glht, for Tukey Tests
+library(modelbased) #For calculating marginal means
+#library(easystats) # To help with graphing models with ggplot https://easystats.github.io/see/
+library(vegan)
+library(car) #For testing heterogeneity with Levene's Test
+```
+
+# Porosity
+
+## Porosity Data
+
+The column "Substrate" corresponds with soil types in the paper.
+
+| Substrate in Porosity.csv | Corresponding soil type in the paper |
+|---------------------------|--------------------------------------|
+| Fine                      | Fine glass sand                      |
+| CoarseA                   | Broad range coarse glass sand        |
+| CoarseB                   | Mid-range coarse glass sand          |
+| MixA                      | Broad range glass/dredge mix         |
+| MixB                      | Mid-range glass/dredge mix           |
+| Dredge                    | Dredge                               |
+
+```{r}
+porosity <- read.csv("./Porosity.csv",stringsAsFactors = T)
+porosity$Substrate <- factor(porosity$Substrate, levels=c("Fine","CoarseA","CoarseB","MixA","MixB","Dredge"))
+
+
+porositywet <- read.csv("./Compaction_November.csv")
+porositywet$Substrate <- factor(porosity$Substrate, levels=c("Fine","CoarseA","CoarseB","MixA","MixB","Dredge"))
+```
+
+## Porosity Models
+
+### Dry Porosity Model
+
+```{r}
+dryporositygls <- gls(Porosity ~ Substrate,
+                   weights = varIdent(form = ~ 1 | Substrate),
+                   method = "REML",
+                   data=porosity)
+
+dryporositygls2 <- gls(Porosity ~ Substrate,
+                   method = "REML",
+                   data=porosity)
+
+anova(dryporositygls,dryporositygls2)
+
+bartlett.test(Porosity ~ Substrate, data = porosity)
+leveneTest(Porosity ~ Substrate, data = porosity)
+#accounting for variance produces a better model. According to the Levene test, this is not necessary, but according to the bartlett.test (more sensitive) it is. 
+#We will go with the Levene test, because this is what we did for Biomass. So porositygls2
+```
+
+### Dry Porosity Validation
+
+```{r}
+hist(resid(dryporositygls2, type = "normalized"))
+#Pretty good
+plot(fitted(dryporositygls2),
+     resid(dryporositygls2, type = "normalized"))
+#Not bad
+
+anova(dryporositygls2, type = "marginal")
+summary(dryporositygls2)
+```
+
+### Dry Porosity Tukey
+
+```{r, tukey porosity}
+tukeydryporosity <- summary((glht(dryporositygls2, linfct = mcp(Substrate=c("CoarseA-Fine=0","CoarseB-Fine=0","MixA-Fine=0","MixB-Fine=0", "Dredge-Fine=0","CoarseB-CoarseA=0","MixA-CoarseA=0","MixB-CoarseA=0", "Dredge-CoarseA=0","MixA-CoarseB=0","MixB-CoarseB=0", "Dredge-CoarseB=0","MixB-MixA=0","Dredge-MixA=0","Dredge-MixB=0")))))
+
+tukeydryporosity
+```
+
+### Wet Porosity Model
+
+```{r}
+porositygls <- gls(SaturatedCompressedPorosity ~ Substrate,                    
+                   weights = varIdent(form = ~ 1 | Substrate),                    method = "REML",                    
+                   data=porositywet)  
+porositygls2 <- gls(SaturatedCompressedPorosity ~ Substrate,                  
+                    method = "REML",                    
+                    data=porositywet) 
+
+anova(porositygls,porositygls2)  
+
+bartlett.test(SaturatedCompressedPorosity ~ Substrate, data = porositywet) 
+
+leveneTest(SaturatedCompressedPorosity ~ Substrate, data = porositywet) 
+#We should not account for variance: simpler model lower AIC and variance not heterogeneous according to both tests.
+```
+
+### Wet Porosity Validation
+
+```{r}
+
+hist(resid(porositygls2, type = "normalized")) #Pretty good but skewed left
+
+plot(fitted(porositygls2),      
+     resid(porositygls2, type = "normalized")) 
+
+#Not bad 
+
+anova(porositygls2)
+#saturated, compressed porosity is impacted by substrate.
+```
+
+### Wet Porosity Tukey
+
+```{r, tukey porosity wet}
+tukeyporositywet <- summary((glht(porositygls2, linfct = mcp(Substrate=c("CoarseA-Fine=0","CoarseB-Fine=0","MixA-Fine=0","MixB-Fine=0", "Dredge-Fine=0","CoarseB-CoarseA=0","MixA-CoarseA=0","MixB-CoarseA=0", "Dredge-CoarseA=0","MixA-CoarseB=0","MixB-CoarseB=0", "Dredge-CoarseB=0","MixB-MixA=0","Dredge-MixA=0","Dredge-MixB=0")))))
+
+tukeyporositywet
+```
+
+Fine differs from: Coarse B, Mix B, Dredge Coarse A differs from: Coarse
+B, Mix B, Dredge Coarse B differs from: Mix A, Mix B Mix A differs from:
+Dredge Mix B differs from: Dredge
+
+## Porosity Stats
+
+```{r, mean se porosity}
+porositymeanse <-
+  porosity %>%
+  group_by(Substrate) %>%
+  summarise(mean = mean(Porosity),
+            se = std.error(Porosity)
+            )
+porositymeanse$me <- porositymeanse$se*1.96
+porositymeanse$min <- porositymeanse$mean-porositymeanse$me
+porositymeanse$max <- porositymeanse$mean+porositymeanse$me
+porositymeanse
+
+porositywetmeanse <-
+  porositywet %>%
+  group_by(Substrate) %>%
+  summarise(mean = mean(SaturatedCompressedPorosity),
+            se = std.error(SaturatedCompressedPorosity)
+            )
+porositywetmeanse$me <- porositywetmeanse$se*1.96
+porositywetmeanse$min <- porositywetmeanse$mean-porositymeanse$me
+porositywetmeanse$max <- porositywetmeanse$mean+porositymeanse$me
+porositywetmeanse
+```
+
+## Porosity Plots
+
+### Dry Porosity Plot
+
+```{r, dryporosityplots}
+my_combo_colors <- c("gold","goldenrod2","goldenrod3", "chartreuse3","chartreuse4", "skyblue3")
+plotporosity <- ggplot(porosity, aes(Substrate, Porosity)) +
+  geom_point(aes(color=Substrate),
+    alpha = 0.85,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_combo_colors) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2
+  ) +
+  theme_bw()
+
+plotporosity
+
+# ggsave(
+#   filename = "./Figures/plotporosity_January.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 3.5,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+
+```
+
+### Wet Porosity Plot
+
+```{r, wetporosityplots}
+my_combo_colors <- c("gold","goldenrod2","goldenrod3", "chartreuse3","chartreuse4", "skyblue3")
+plotporositywet <- ggplot(porositywet, aes(Substrate, SaturatedCompressedPorosity)) +
+  geom_point(aes(color=Substrate),
+    alpha = 0.85,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_combo_colors) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2
+  ) +
+  theme_bw()
+
+plotporositywet
+
+# ggsave(
+#   filename = "./Figures/plotwetporosity_January.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 3.5,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+```
+
+# Particle Density
+
+## Particle Density Data
+
+Particle density data is in with the porosity data.
+
+```{r}
+porosity <- read.csv("./Porosity.csv",stringsAsFactors = T)
+porosity$Substrate <- factor(porosity$Substrate, levels=c("Fine","CoarseA","CoarseB","MixA","MixB","Dredge"))
+
+```
+
+## Particle Density Models
+
+```{r}
+pdgls2 <- gls(ParticleDensity_gperml ~ Substrate,
+                   weights = varIdent(form = ~ 1 | Substrate),
+                   method = "REML",
+                   data=porosity)
+
+pdgls <- gls(ParticleDensity_gperml ~ Substrate,
+                   method = "REML",
+                   data=porosity)
+
+anova(pdgls,pdgls2)
+bartlett.test(ParticleDensity_gperml ~ Substrate, data = porosity)
+leveneTest(ParticleDensity_gperml ~ Substrate, data = porosity)
+# the more complex model has lower AIC, and the data fail the bartlett and levene tests, so we should use pdgls2.
+```
+
+## Particle Density Validation
+
+```{r}
+hist(resid(pdgls2, type = "normalized"))
+#okay
+plot(fitted(pdgls2),
+     resid(pdgls, type = "normalized"))
+#alright
+
+anova(pdgls2)
+summary(pdgls2)
+```
+
+## Particle Density Tukey
+
+```{r, tukey partdens}
+tukeypd <- summary((glht(pdgls2, linfct = mcp(Substrate=c("CoarseA-Fine=0","CoarseB-Fine=0","MixA-Fine=0","MixB-Fine=0", "Dredge-Fine=0","CoarseB-CoarseA=0","MixA-CoarseA=0","MixB-CoarseA=0", "Dredge-CoarseA=0","MixA-CoarseB=0","MixB-CoarseB=0", "Dredge-CoarseB=0","MixB-MixA=0","Dredge-MixA=0","Dredge-MixB=0")))))
+
+tukeypd
+```
+
+## Particle Density Stats
+
+```{r, mean se particle density}
+pdmeanse <-
+  porosity %>%
+  group_by(Substrate) %>%
+  summarise(mean = mean(ParticleDensity_gperml),
+            se = std.error(ParticleDensity_gperml)
+            )
+pdmeanse$me <- pdmeanse$se*1.96
+pdmeanse$min <- pdmeanse$mean-pdmeanse$me
+pdmeanse$max <- pdmeanse$mean+pdmeanse$me
+pdmeanse
+```
+
+## Particle Density Plots
+
+```{r, porosityplots}
+my_combo_colors <- c("gold","goldenrod2","goldenrod3", "chartreuse3","chartreuse4", "skyblue3")
+plotpd <- ggplot(porosity, aes(Substrate, ParticleDensity_gperml)) +
+  geom_point(aes(color=Substrate),
+    alpha = 0.65,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_combo_colors) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2
+  ) +
+  theme_bw()
+
+plotpd
+
+# ggsave(
+#   filename = "./Figures/plotpd_January.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 3.5,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+```
+
+# Bulk Density
+
+## BD Data
+
+SoilType column in DryBulkDensity.csv corresponds with soil types in the
+paper.
+
+| SoilType in DryBulkDensity.csv | Corresponding soil type in the paper |
+|--------------------------------|--------------------------------------|
+| Fine                           | Fine glass sand                      |
+| CoarseA                        | Broad range coarse glass sand        |
+| CoarseB                        | Mid-range coarse glass sand          |
+| MixA                           | Broad range glass/dredge mix         |
+| MixB                           | Mid-range glass/dredge mix           |
+| Dredge                         | Dredge                               |
+
+```{r}
+bulkdens <- read.csv("./DryBulkDensity.csv",stringsAsFactors = T) %>% group_by(SoilType)
+
+
+bulkdens$SoilType <- factor(bulkdens$SoilType, levels = c("Fine","CoarseA","CoarseB","MixA","MixB","Dredge"))
+
+compaction <- read.csv("./Compaction_November.csv") %>% group_by(SoilType)
+
+compaction$SoilType <- factor(compaction$SoilType, levels = c("Fine","CoarseA","CoarseB","MixA","MixB","Dredge"))
+
+```
+
+## BD Models
+
+### Dry Uncompressed Model
+
+```{r}
+bddrygls <- gls(BDUncompressed_gperml_Rounded ~ SoilType, 
+                  weights = varIdent(form = ~ 1 | SoilType),
+                  method = "REML", 
+                  data = bulkdens)
+bddrygls2 <- gls(BDUncompressed_gperml_Rounded ~ SoilType, 
+                  method = "REML", 
+                  data = bulkdens)
+
+anova(bddrygls,bddrygls2)
+
+bartlett.test(BDUncompressed_gperml_Rounded ~ SoilType, data = bulkdens)
+#Variances are homogeneous and it's lower AIC not to include them in the model.
+leveneTest(BDUncompressed_gperml_Rounded ~ SoilType, data = bulkdens)
+```
+
+### Dry Uncompressed Validation
+
+```{r}
+hist(resid(bddrygls2, type = "normalized"))
+#Pretty good
+plot(fitted(bddrygls2),
+     resid(bddrygls2, type = "normalized"))
+#Pretty good
+anova(bddrygls)
+```
+
+### Dry Uncompressed Tukey
+
+```{r, tukey bddry}
+tukeybddry <- summary(glht(bddrygls2,linfct = mcp(SoilType=c("CoarseA-Fine=0","CoarseB-Fine=0","MixA-Fine=0","MixB-Fine=0", "Dredge-Fine=0","CoarseB-CoarseA=0","MixA-CoarseA=0","MixB-CoarseA=0", "Dredge-CoarseA=0","MixA-CoarseB=0","MixB-CoarseB=0", "Dredge-CoarseB=0","MixB-MixA=0","Dredge-MixA=0","Dredge-MixB=0"))))
+tukeybddry
+```
+
+### Dry Unompressed Stats
+
+```{r, meanse bd dry}
+drybdmeanse <-
+  bulkdens %>%
+  group_by(SoilType) %>%
+  summarise(mean = mean(BDUncompressed_gperml_Rounded),
+            se = std.error(BDUncompressed_gperml_Rounded)
+            )
+drybdmeanse$me <- drybdmeanse$se*1.96
+drybdmeanse$min <- drybdmeanse$mean-drybdmeanse$me
+drybdmeanse$max <- drybdmeanse$mean+drybdmeanse$me
+drybdmeanse
+```
+
+### Saturated Compressed Model
+
+This model is based on data estimated from average dry bulk density. It
+assumes that the uncompressed saturated and unsaturated bulk densities
+are equivalent. However, Saturated bulk densities are likely more
+compressed, according to SA.
+
+```{r}
+bdsatcompestgls2 <- gls(BD_SaturatedCompressed_Estimated_gperml ~ SoilType, 
+                  weights = varIdent(form = ~ 1 | SoilType),
+                  method = "REML", 
+                  data = compaction)
+bdsatcompestgls <- gls(BD_SaturatedCompressed_Estimated_gperml ~ SoilType, 
+                  method = "REML", 
+                  data = compaction)
+anova(bdsatcompestgls,bdsatcompestgls2)
+
+bartlett.test(BD_SaturatedCompressed_Estimated_gperml ~ SoilType, data = compaction)
+#Variances are homogeneous and it's lower AIC not to include them in the model.
+leveneTest(BD_SaturatedCompressed_Estimated_gperml ~ SoilType, data = compaction)
+```
+
+### Saturated Compressed Validation
+
+```{r}
+hist(resid(bdsatcompestgls, type = "normalized"))
+#Not great but not terrible
+plot(fitted(bdsatcompestgls),
+     resid(bdsatcompestgls, type = "normalized"))
+#not the best
+
+anova(bdsatcompestgls)
+```
+
+### Saturated Compressed Tukey
+
+```{r, tukey bdsatcomp better}
+
+tukeybdsatcompest <- summary(glht(bdsatcompestgls,linfct = mcp(SoilType=c("CoarseA-Fine=0","CoarseB-Fine=0","MixA-Fine=0","MixB-Fine=0", "Dredge-Fine=0","CoarseB-CoarseA=0","MixA-CoarseA=0","MixB-CoarseA=0", "Dredge-CoarseA=0","MixA-CoarseB=0","MixB-CoarseB=0", "Dredge-CoarseB=0","MixB-MixA=0","Dredge-MixA=0","Dredge-MixB=0"))))
+tukeybdsatcompest
+
+```
+
+### Saturated Compressed Stats
+
+```{r, meanse bd satcomp}
+bdmeanse <-
+  compaction %>%
+  group_by(SoilType) %>%
+  summarise(mean = mean(BD_SaturatedCompressed_Estimated_gperml),
+            se = std.error(BD_SaturatedCompressed_Estimated_gperml)
+            )
+bdmeanse$me <- bdmeanse$se*1.96
+bdmeanse$min <- bdmeanse$mean-bdmeanse$me
+bdmeanse$max <- bdmeanse$mean+bdmeanse$me
+bdmeanse
+```
+
+All differ except CoarseB and Fine (surprisingly), CoarseA and the Mixes
+(expectedly), CoarseA and Dredge, The mixes with themselves, and Dredge
+and Mixes.
+
+## BD Plots
+
+### Dry Uncompressed Plot
+
+```{r, plot bd}
+my_combo_colors <- c("gold","goldenrod2","goldenrod3", "chartreuse3","chartreuse4", "skyblue3")
+  
+plotbddry <- ggplot(bulkdens, aes(SoilType, BDUncompressed_gperml_Rounded)) +
+  geom_point(aes(color=SoilType),
+    alpha = 0.65,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_combo_colors) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2
+  ) +
+  theme_bw()
+
+plotbddry
+
+ggsave(
+  filename = "./Figures/plotbddry_January.pdf",
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = 3.5,
+  height = 2.5,
+  units = c("in"),
+  dpi = 600,
+  limitsize = TRUE,
+  bg = NULL,
+  create.dir = FALSE
+)
+```
+
+### Saturated Compressed Plot
+
+Dry weight calculated based on average bulk density.
+
+```{r}
+plotbdsatcomp <- ggplot(compaction, aes(SoilType, BD_SaturatedCompressed_Estimated_gperml)) +
+  geom_point(aes(color=SoilType),
+    alpha = 0.65,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_combo_colors) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2
+  ) +
+  theme_bw()
+
+plotbdsatcomp
+
+# ggsave(
+#   filename = "./Figures/plotbdsatcomp_January.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 3.5,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+```
+
+## BD Stats
+
+```{r}
+bddrymn1 <- bulkdens %>% group_by(SoilType) %>% summarise(mean = mean(BDUncompressed_gperml_Rounded), se = std.error(BDUncompressed_gperml_Rounded))
+bddrymn1
+
+bdsatcompmn1 <- compaction %>% group_by(SoilType) %>% summarise(mean = mean(BD_SaturatedCompressed_Estimated_gperml), se = std.error(BD_SaturatedCompressed_Estimated_gperml))
+bdsatcompmn1
+
+bddrymeanse <- bulkdens %>%
+  summarise(mean = mean(BDUncompressed_gperml_Rounded),
+            se = std.error(BDUncompressed_gperml_Rounded))
+bddrymeanse$me <- bddrymeanse$se*1.96
+bddrymeanse$min <- bddrymeanse$mean-bddrymeanse$me
+bddrymeanse$max <- bddrymeanse$mean+bddrymeanse$me
+bddrymeanse
+
+bdsatcompmeanse <- compaction %>%
+  summarise(mean = mean(BD_SaturatedCompressed_Estimated_gperml),
+            se = std.error(BD_SaturatedCompressed_Estimated_gperml))
+bdsatcompmeanse$me <- bdsatcompmeanse$se*1.96
+bdsatcompmeanse$min <- bdsatcompmeanse$mean-bdsatcompmeanse$me
+bdsatcompmeanse$max <- bdsatcompmeanse$mean+bdsatcompmeanse$me
+bdsatcompmeanse
+```
+
+# Compaction
+
+## Compaction Data
+
+| SoilType in Compaction.csv | Corresponding soil type in the paper |
+|----------------------------|--------------------------------------|
+| Fine                       | Fine                                 |
+| CoarseA                    | Coarse 1                             |
+| CoarseB                    | Coarse 2                             |
+| MixA                       | Mix 1                                |
+| MixB                       | Mix 2                                |
+| Dredge                     | Dredge                               |
+
+```{r}
+compaction <- read.csv("./Compaction_November.csv",stringsAsFactors = T) %>% group_by(SoilType)
+
+compaction$SoilType <- factor(compaction$SoilType, levels = c("Fine","CoarseA","CoarseB","MixA","MixB","Dredge"))
+```
+
+## Compaction Modeling
+
+```{r}
+compactgls2 <- gls(Compaction ~ SoilType, 
+                  weights = varIdent(form = ~ 1 | SoilType),
+                  method = "REML", 
+                  data = compaction)
+compactgls <- gls(Compaction ~ SoilType, 
+                  method = "REML", 
+                  data = compaction)
+
+anova(compactgls,compactgls2)
+
+bartlett.test(Compaction ~ SoilType, data = compaction)
+leveneTest(Compaction ~ SoilType, data = compaction)
+
+#This passes both tests of variance, and the simpler model also has a lower AIC.
+```
+
+## Compaction Validation
+
+```{r}
+hist(resid(compactgls, type = "normalized"))
+#not terrible, but skewed right
+plot(fitted(compactgls),
+     resid(compactgls, type = "normalized"))
+#pretty good
+anova(compactgls)
+```
+
+## Compaction Tukey
+
+```{r}
+tukeycompact <- summary(glht(compactgls,linfct = mcp(SoilType=c("CoarseA-Fine=0","CoarseB-Fine=0","MixA-Fine=0","MixB-Fine=0", "Dredge-Fine=0","CoarseB-CoarseA=0","MixA-CoarseA=0","MixB-CoarseA=0", "Dredge-CoarseA=0","MixA-CoarseB=0","MixB-CoarseB=0", "Dredge-CoarseB=0","MixB-MixA=0","Dredge-MixA=0","Dredge-MixB=0"))))
+tukeycompact
+```
+
+MixB and CoarseA differ. All else equal.
+
+## Compaction Plots
+
+```{r, compactionplots}
+my_combo_colors <- c("gold","goldenrod2","goldenrod3", "chartreuse3","chartreuse4", "skyblue3")
+plotcompact <- ggplot(compaction, aes(SoilType, Compaction)) +
+  geom_point(aes(color=SoilType),
+    alpha = 0.65,
+    position = position_jitter(height = 0, width = 0.2),
+    size = 1.5,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = my_combo_colors) +
+  stat_summary(
+    fun.data = mean_se,
+    geom = "errorbar",
+    width = 0.2,
+    colour = "black",
+    alpha = 1
+  ) +
+  stat_summary(
+    fun = mean,
+    geom = "point",
+    fill = "black",
+    pch = 21,
+    size = 2
+  ) +
+  theme_bw()
+
+plotcompact
+
+# ggsave(
+#   filename = "./Figures/plotcompact_January.pdf",
+#   plot = last_plot(),
+#   device = NULL,
+#   path = NULL,
+#   scale = 1,
+#   width = 3.5,
+#   height = 2.5,
+#   units = c("in"),
+#   dpi = 600,
+#   limitsize = TRUE,
+#   bg = NULL,
+#   create.dir = FALSE
+# )
+```
+
+## Compaction Stats
+
+```{r, mean se Shehbaz}
+compactmeanse <-
+  compaction %>%
+  summarise(mean = mean(Compaction),
+            se = std.error(Compaction))
+compactmeanse$me <- compactmeanse$se*1.96
+compactmeanse$min <- compactmeanse$mean-compactmeanse$me
+compactmeanse$max <- compactmeanse$mean+compactmeanse$me
+compactmeanse
+```

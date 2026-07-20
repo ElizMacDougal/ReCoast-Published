@@ -1,0 +1,257 @@
+---
+title: "MacDougal et al. 2025 Biomass Analysis"
+author: "Elizabeth MacDougal"
+date: "2024-2025"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+#install.packages('tinytex')
+#knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir='~/Tulane/1_VBL/2_ReCoast/Paper Growth/Analysis/Publish')
+knitr::opts_chunk$set(
+  dev = "png",
+  dpe = 300,
+  echo = FALSE,
+  cache = TRUE
+)
+options(contrasts=c("contr.helmert","contr.poly"));options("contrasts")
+```
+
+newpage
+
+# Description
+
+This file accompanies the paper "Wetland plant growth in recycled glass
+sand versus dredged river sand: Evaluating a new resource for coastal
+restoration." Paper authors: Elizabeth MacDougal, Bek Markel, Emily
+Farrer, Shehbaz Ahmad, Julie Albert, Sunshine Van Bael. Analyses in this
+file were conducted by Elizabeth MacDougal, with advising from Emily
+Farrer and Sunshine Van Bael. Corresponding author: Elizabeth MacDougal,
+[emacdougal\@tulane.edu](mailto:emacdougal@tulane.edu){.email}
+
+The data come from the second experiment described in the paper.
+Contributions to Nutrient Analyses for the experiment were as follows:
+
+Funding was provided by National Science Foundation Convergence
+Accelerator Program Award Number 2137730.
+
+-   EM planned plant nutrient sampling, which was conducted by lab
+    members.
+
+-   EM sampled soils for nutrients.
+
+-   EM ordered soil and plant nutrient testing from LSU's Soil Testing
+    and Plant Analysis Lab.
+
+## Purpose of this File
+
+This file includes all analyses described in the paper. It serves to
+provide more detail to those who are curious, and to help others
+reproduce the results.
+
+# Environment Setup
+
+Define options for contrasts
+
+```{r, include=FALSE}
+options(contrasts = c("contr.helmert", "contr.poly"))
+options("contrasts")
+```
+
+Libraries Used
+
+```{r, warning=FALSE, echo=FALSE}
+library(dplyr)  #DATA ORGANIZATION %>% symbol is used for "piping."
+library(nlme) #DATA ORGANIZATION. Tidyr is in here, and this lets me rearrange my data. 
+library(tidyverse) #PLOTTING DATA. Useful for customizing plots
+library(ggrepel) #PLOTTING DATA. Keeps labels from overlapping
+library(vegan)
+library(tidyr) # For PCAs
+```
+
+# How do nutrients vary by substrate type?
+
+## Giant Bulrush
+
+### Data Description
+
+See paper for methods on nutrient extraction.
+
+| Column Header | Description |
+|----|----|
+| Substrate | Correlates with Soil Type in paper. D = Dredge, M = Mid-range glass/dredge mix, G = Mid-range coarse glass |
+| Al | Aluminum (mg/kg) |
+| As | Arsenic (mg/kg) |
+| B | Boron (mg/kg) |
+| Cd | Cadmium (mg/kg) |
+| Ca | Calcium (%) |
+| C | Carbon (%) |
+| Cu | Copper (mg/kg) |
+| Fe | Iron (mg/kg) |
+| Pb | Lead (mg/kg) |
+| Mg | Magnesium (%) |
+| Mn | Manganese (mg/kg) |
+| Mo | Molybdenum (mg/kg) |
+| Ni | Nickel (mg/kg) |
+| N | Nitrogen (%) |
+| P | Phosphorus (%) |
+| K | Potassium (%) |
+| Se | Selenium (mg/kg) |
+| Na | Sodium (mg/kg) |
+| S | Sulfur (%) |
+| Zn | Zinc (mg/kg) |
+
+### Data Prep
+
+#### Assign Data to a Variable
+
+```{r}
+plantnutrients <- read.csv("./LSUPlantNutrients.csv",stringsAsFactors = T, header=T)%>%
+  group_by(Substrate)
+
+```
+
+#### Straighten up the Data
+
+```{r}
+plantnutrients$Substrate <- factor(plantnutrients$Substrate, levels=c("G","M","D"))
+plantnutrients_detected <- plantnutrients[,!(names(plantnutrients) %in% c("As","Cd","Pb","Mo","Se"))]
+
+plantnutrients_detected$Ni <- as.numeric(plantnutrients_detected$Ni)
+
+plantnutrients_detected$Na<- as.numeric(plantnutrients_detected$Na)
+```
+
+### PCA to plot
+
+I am trying to reduce multiple variables per sample into a two
+dimensional plot, so this is the appropriate choice. I will not be able
+to have a response variable here, but that is actually fine for a PCA.
+
+```{r, plant pca}
+# PCA
+plantenv <- plantnutrients_detected[,c(2:16)]
+plantcat <- c("D","D","D","D","D","M","M","M","M","M","G","G","G","G","G")
+plantcat <- factor(plantcat, levels = c("D","M","G"))
+
+plantenv.pca <- rda(plantenv, scale = TRUE)
+summary(plantenv.pca)
+
+species_scores1<-data.frame(scores(plantenv.pca,scaling=1)$species,labels=rownames(scores(plantenv.pca,scaling=1)$species))
+
+site_scores1 <- data.frame(scores(plantenv.pca,scaling=1)$sites, labels=c("D1","D2","D3","D4","D5","M1","M2","M3","M4","M5","G1","G2","G3","G4","G5"))
+
+myplantpcacolors <- c("skyblue3","goldenrod2","chartreuse3")
+
+ggplot() + 
+  ggtitle("Plant Nutrients Site Scores") +
+  geom_vline(xintercept = c(0), color = "grey70", linetype = 2) +
+  geom_hline(yintercept = c(0), color = "grey70", linetype = 2) +  
+  xlab("PC1 (34.05%)") + 
+  ylab("PC2 (18.64%)") +  
+  geom_point(data=site_scores1, aes(x=PC1, y=PC2, label=labels, color=plantcat, shape = plantcat),show.legend=FALSE, size=6) +
+  scale_color_manual(values = myplantpcacolors) +
+  geom_segment(data=species_scores1, aes(x=0, y=0, xend=PC1, yend=PC2), colour="black", linewidth=0.4, arrow=arrow(length=unit(.15,"cm"))) +
+  geom_text_repel(data=species_scores1, aes(x=PC1, y=PC2, label=labels), size=5,colour="black")+
+  theme_bw()
+```
+
+### Permanova to Determine Differences
+
+```{r}
+adonis2(plantenv ~ plantcat, data=plantcat)
+#plant groups differ (F2,12=15.745.1, p = 0.003)
+```
+
+## Soil Samples
+
+### Data Description
+
+See paper for methods on nutrient extraction. Soils were sampled from
+bags containing the mix types used in the experiment. They were sampled
+after the experiment, but the specific soil sampled was extra that had
+not been used in the experiment.
+
+| Column Header | Description |
+|----|----|
+| Sample |  |
+| Soil Type | D = Dredge, M = Mid-range glass/dredge mix, G = Mid-range coarse glass |
+| Ca | Calcium (ppm) |
+| Cu | Copper (ppm) |
+| Mg | Magnesium (ppm) |
+| pH | pH measured from 1:1 soil:water solution |
+| P | Phosphorus (ppm) |
+| K | Potassium (ppm) |
+| Na | Sodium (ppm) |
+| S | Sulfur (ppm) |
+| Zn | Zinc (ppm) |
+| OM | Organic Matter (%) |
+| As | Arsenic (ppm) |
+| Cd | Cadmium (ppm) |
+| Pb | Lead (ppm) |
+| Ni | Nickel (ppm) |
+| Zn_HCl | Zinc (ppm), extracted with HCl |
+
+### Data Prep
+
+#### Assign Data to a Variable
+
+```{r}
+soils <- read.csv("./Soil_Combined_LSU.csv",stringsAsFactors = T, header=T)%>%
+  group_by(SoilType)
+#use strings as factors = T, it makes them factors not characters
+```
+
+#### Straighten up the Data
+
+```{r}
+soils$SoilType <- factor(soils$SoilType, levels=c("G","M","D"))
+```
+
+## PCA
+
+```{r,soil ordination}
+soilenv <- soils[,3:17]
+
+soilcat <- c("D","D","D","M","M","M","G","G","G")
+soilcat <- factor(soilcat, levels = c("D","M","G"))
+
+soilenv.rda <- rda(soilenv, scale = TRUE)
+summary(soilenv.rda)
+screeplot(soilenv.rda)
+abline(a=1,b=0)
+#scaling to compare "sites" (samples)
+species_scores1<-data.frame(scores(soilenv.rda,scaling=1)$species,labels=rownames(scores(soilenv.rda,scaling=1)$species))
+
+site_scores1 <- data.frame(scores(soilenv.rda,scaling=1)$sites, labels=c("D1","D2","D3","M1","M2","M3","G1","G2","G3"))
+
+mysoilpcacolors <- c("skyblue3","goldenrod2","chartreuse3")
+
+ggplot() + 
+  ggtitle("Soil Nutrients Site Scores") +
+  geom_vline(xintercept = c(0), color = "grey70", linetype = 2) +
+  geom_hline(yintercept = c(0), color = "grey70", linetype = 2) +  
+  xlab("PC1 (57.2%)") + 
+  ylab("PC2 (24.7%)") +  
+  geom_point(data=site_scores1, aes(x=PC1, y=PC2, label=labels, color=soilcat, shape = soilcat),show.legend=FALSE, size=6) +
+  scale_color_manual(values = mysoilpcacolors) +
+  geom_segment(data=species_scores1, aes(x=0, y=0, xend=PC1, yend=PC2), colour="black", size=0.4, arrow=arrow(length=unit(.15,"cm"))) +
+  geom_text_repel(data=species_scores1, aes(x=PC1, y=PC2, label=labels), size=5,colour="black")+
+  theme_bw()
+```
+
+## PERMANOVA
+
+Do my groups differ?
+
+```{r}
+adonis2(soilenv ~ soilcat, data=soilcat)
+#soil groups differ (F2,6=197.1, p = 0.003)
+```
